@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <meta name="description" content="Interactive 3D car concept dashboard featuring a Sketchfab-origin concept car with material variants, animated parts, and real-time controls. Built with Three.js.">
 <meta name="theme-color" content="#0a0a0f">
 <title>Car Concept 3D Dashboard — Interactive Viewer</title>
@@ -186,15 +186,6 @@
     height: 1px; background: var(--border); margin: 14px 0;
   }
 
-  /* Mobile hamburger */
-  #mobile-toggle {
-    display: none; position: fixed; top: 12px; left: 12px;
-    z-index: 20; width: 44px; height: 44px;
-    border-radius: 10px; border: 1px solid var(--border);
-    background: var(--panel-bg); color: var(--text);
-    font-size: 20px; cursor: pointer; align-items: center; justify-content: center;
-  }
-
   /* Tooltip */
   .tooltip {
     position: fixed; z-index: 30; pointer-events: none;
@@ -203,19 +194,181 @@
     opacity: 0; transition: opacity 0.15s;
   }
 
+  /* ─── Bottom Sheet (mobile) ─── */
+  #bottom-sheet {
+    display: none;
+  }
+
   @media (max-width: 768px) {
-    #mobile-toggle { display: flex; }
-    #left-panel {
-      transform: translateX(-110%);
-      transition: transform 0.3s;
-      z-index: 15;
+    /* Hide desktop panels on mobile */
+    #left-panel, #right-panel, #bottom-bar { display: none !important; }
+
+    /* Compact top bar on mobile */
+    #top-bar {
+      top: max(8px, env(safe-area-inset-top, 8px));
+      left: 0; right: 0; transform: none;
+      border-radius: 0;
+      padding: 8px 16px;
+      justify-content: center;
+      gap: 10px;
+      border-left: none; border-right: none;
+      background: rgba(10, 10, 15, 0.85);
     }
-    #left-panel.open { transform: translateX(0); }
-    #right-panel { display: none; }
-    #bottom-bar {
-      left: 50%; right: auto; transform: translateX(-50%);
-      padding: 8px 12px;
+    #top-bar .badge:first-of-type { display: none; }
+    #top-bar .logo { font-size: 14px; }
+    #top-bar .badge { font-size: 10px; padding: 2px 8px; }
+
+    /* Bottom sheet container */
+    #bottom-sheet {
+      display: block;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      z-index: 20;
+      background: rgba(16, 16, 24, 0.96);
+      border-top: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+      transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      max-height: 62vh;
+      overflow: hidden;
+      display: flex; flex-direction: column;
     }
+
+    #bottom-sheet.collapsed {
+      transform: translateY(calc(100% - 72px));
+    }
+    #bottom-sheet.expanded {
+      transform: translateY(0);
+    }
+
+    /* Drag handle */
+    .sheet-handle {
+      width: 36px; height: 5px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+      margin: 10px auto 6px;
+      flex-shrink: 0;
+      cursor: grab;
+    }
+    .sheet-handle:active { cursor: grabbing; }
+
+    /* Sheet tab bar */
+    .sheet-tabs {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin: 0 12px 10px;
+      flex-shrink: 0;
+    }
+    .sheet-tab {
+      flex: 1; text-align: center;
+      padding: 10px 4px;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      min-height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .sheet-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Sheet content area */
+    .sheet-content {
+      flex: 1; overflow-y: auto;
+      padding: 0 16px 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sheet-content::-webkit-scrollbar { width: 0; }
+
+    .sheet-pane { display: none; }
+    .sheet-pane.active { display: block; }
+
+    /* Quick actions row (visible when collapsed) */
+    .sheet-quick-actions {
+      display: flex; gap: 8px;
+      padding: 0 16px 8px;
+      flex-shrink: 0;
+      justify-content: center;
+    }
+    #bottom-sheet.expanded .sheet-quick-actions { display: none; }
+    #bottom-sheet.collapsed .sheet-quick-actions { display: flex; }
+
+    .quick-btn {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .quick-btn:active { background: rgba(255,255,255,0.15); transform: scale(0.93); }
+    .quick-btn.active { background: rgba(59,130,246,0.2); border-color: var(--accent); color: var(--accent); }
+
+    /* Mobile button sizes */
+    .sheet-pane .btn {
+      padding: 12px 16px; font-size: 14px;
+      border-radius: 12px; min-height: 48px;
+      justify-content: center;
+    }
+    .sheet-pane .color-swatch {
+      width: 44px; height: 44px;
+    }
+    .sheet-pane .btn-row {
+      gap: 8px; margin-bottom: 12px;
+    }
+    .sheet-pane .section-title {
+      font-size: 11px; margin-bottom: 8px;
+    }
+    .sheet-pane input[type="range"] {
+      height: 6px;
+    }
+    .sheet-pane input[type="range"]::-webkit-slider-thumb {
+      width: 24px; height: 24px;
+    }
+
+    /* Specs pill inside sheet */
+    .specs-pill {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .specs-pill .spec-chip {
+      font-size: 12px; padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .specs-pill .spec-chip strong {
+      color: var(--text-muted); font-weight: 400; margin-right: 4px;
+    }
+
+    /* Footer on mobile */
+    footer {
+      bottom: max(76px, env(safe-area-inset-bottom, 0px) + 60px);
+      font-size: 9px; padding: 4px 8px;
+      z-index: 6;
+    }
+  }
+
+  /* Tablet (768px - 1024px) */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    #left-panel { width: 240px; }
+    #right-panel { width: 190px; font-size: 12px; }
+    #right-panel .spec-item { font-size: 12px; padding: 6px 0; }
+    #top-bar { padding: 6px 14px; }
+    #top-bar .badge:first-of-type { display: inline; }
+    #bottom-bar { padding: 8px 12px; gap: 6px; }
+    #bottom-bar .btn { font-size: 12px; padding: 6px 12px; }
   }
 
   footer {
@@ -238,6 +391,89 @@
 </div>
 
 <button id="mobile-toggle" onclick="document.getElementById('left-panel').classList.toggle('open')">&#9776;</button>
+
+<div id="bottom-sheet" class="collapsed">
+  <div class="sheet-handle" id="sheet-handle"></div>
+  <div class="sheet-tabs">
+    <div class="sheet-tab active" data-pane="pane-colors">Colors</div>
+    <div class="sheet-tab" data-pane="pane-anim">Animate</div>
+    <div class="sheet-tab" data-pane="pane-cam">Cameras</div>
+    <div class="sheet-tab" data-pane="pane-settings">Settings</div>
+  </div>
+  <div class="sheet-content">
+    <div class="sheet-pane active" id="pane-colors">
+      <div class="section-title">Paint Color</div>
+      <div class="btn-row" id="mobile-color-swatches">
+        <div class="color-swatch active" data-variant="0" style="background: linear-gradient(135deg, #8b0000, #cc2222);" title="Carmine Candy"></div>
+        <div class="color-swatch" data-variant="1" style="background: linear-gradient(135deg, #e8e0d0, #f5f0e8, #c8b896);" title="Pearly Swirly"></div>
+        <div class="color-swatch" data-variant="2" style="background: linear-gradient(135deg, #2a2a2a, #555, #1a1a1a);" title="Torched Graphite"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">View Mode</div>
+      <div class="btn-row">
+        <button class="btn active" data-action="turntable">Turntable</button>
+        <button class="btn" data-action="orbit">Free Orbit</button>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Vehicle Info</div>
+      <div class="specs-pill">
+        <span class="spec-chip"><strong>Type</strong> Concept Coupe</span>
+        <span class="spec-chip"><strong>Doors</strong> 2-Door</span>
+        <span class="spec-chip"><strong>Style</strong> Futuristic GT</span>
+        <span class="spec-chip"><strong>Paint</strong> <span id="mobile-spec-paint">Carmine Candy</span></span>
+        <span class="spec-chip"><strong>Engine</strong> Mid</span>
+        <span class="spec-chip"><strong>Source</strong> Sketchfab</span>
+      </div>
+    </div>
+    <div class="sheet-pane" id="pane-anim">
+      <div class="section-title">Body Panels</div>
+      <div class="btn-row">
+        <button class="btn" data-action="door-left" data-toggle="true">Left Door</button>
+        <button class="btn" data-action="door-right" data-toggle="true">Right Door</button>
+        <button class="btn" data-action="hood" data-toggle="true">Hood</button>
+        <button class="btn" data-action="hatch" data-toggle="true">Hatch</button>
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Motion</div>
+      <div class="btn-row">
+        <button class="btn" data-action="spin-wheels" data-toggle="true">Spin Wheels</button>
+        <button class="btn" data-action="drive" data-toggle="true">Drive Loop</button>
+        <button class="btn" data-action="explode" data-toggle="true">Explode View</button>
+        <button class="btn" data-action="reset-all">Reset All</button>
+      </div>
+    </div>
+    <div class="sheet-pane" id="pane-cam">
+      <div class="section-title">Camera Presets</div>
+      <div class="btn-row">
+        <button class="btn" data-action="cam-front">Front</button>
+        <button class="btn" data-action="cam-back">Back</button>
+        <button class="btn" data-action="cam-side">Side</button>
+        <button class="btn" data-action="cam-top">Top</button>
+        <button class="btn" data-action="cam-interior">Interior</button>
+      </div>
+    </div>
+    <div class="sheet-pane" id="pane-settings">
+      <div class="section-title">Lighting</div>
+      <div class="slider-group">
+        <label>Brightness <span id="mobile-light-val">100%</span></label>
+        <input type="range" id="mobile-light-slider" min="20" max="200" value="100">
+      </div>
+      <div class="divider"></div>
+      <div class="section-title">Display</div>
+      <div class="btn-row">
+        <button class="btn" id="mobile-btn-wireframe">Wireframe</button>
+        <button class="btn" id="mobile-btn-screenshot">Screenshot</button>
+        <button class="btn" id="mobile-btn-fullscreen">Fullscreen</button>
+      </div>
+    </div>
+  </div>
+  <div class="sheet-quick-actions">
+    <button class="quick-btn" data-quick="door-left" title="Left Door">&#128682;</button>
+    <button class="quick-btn" data-quick="door-right" title="Right Door">&#128682;</button>
+    <button class="quick-btn" data-quick="spin-wheels" title="Spin Wheels">&#9881;</button>
+    <button class="quick-btn" data-quick="reset-all" title="Reset">&#8634;</button>
+  </div>
+</div>
 
 <div id="ui-overlay">
   <!-- Top Bar -->
@@ -350,7 +586,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 // ─── Scene Setup ──────────────────────────────────
 const container = document.getElementById('canvas-container');
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth <= 768 ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -705,6 +941,9 @@ document.querySelectorAll('.btn[data-action]').forEach(btn => {
           if (carModel) carModel.position.x = 0;
         }
       }
+
+      // Sync mobile quick buttons
+      syncQuickButtons();
     }
 
     // Non-toggle actions
@@ -739,9 +978,15 @@ document.querySelectorAll('.btn[data-action]').forEach(btn => {
 // Color swatches
 document.querySelectorAll('.color-swatch').forEach(swatch => {
   swatch.addEventListener('click', () => {
-    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-    swatch.classList.add('active');
-    applyVariant(parseInt(swatch.dataset.variant));
+    const variant = parseInt(swatch.dataset.variant);
+    // Update all swatch groups
+    document.querySelectorAll('#color-swatches .color-swatch').forEach((s, i) => {
+      s.classList.toggle('active', i === variant);
+    });
+    document.querySelectorAll('#mobile-color-swatches .color-swatch').forEach((s, i) => {
+      s.classList.toggle('active', i === variant);
+    });
+    applyVariant(variant);
   });
 });
 
@@ -864,6 +1109,15 @@ function resetAll() {
   camera.position.copy(endPos);
   controls.target.copy(endTarget);
   controls.update();
+
+  // Sync mobile UI
+  syncQuickButtons();
+  const mobileWireframeBtn = document.getElementById('mobile-btn-wireframe');
+  if (mobileWireframeBtn) mobileWireframeBtn.classList.remove('active');
+  if (document.getElementById('mobile-light-slider')) {
+    document.getElementById('mobile-light-slider').value = 100;
+    document.getElementById('mobile-light-val').textContent = '100%';
+  }
 }
 
 // ─── Keyboard Shortcuts ──────────────────────────
@@ -1041,6 +1295,160 @@ window.addEventListener('resize', () => {
 
 // ─── Touch support for mobile ───────────────────
 window.addEventListener('touchstart', () => {}, { passive: true });
+
+// ─── Bottom Sheet (mobile) ─────────────────────
+const bottomSheet = document.getElementById('bottom-sheet');
+const sheetHandle = document.getElementById('sheet-handle');
+let sheetExpanded = false;
+let touchStartY = 0;
+let sheetStartY = 0;
+
+function syncQuickButtons() {
+  document.querySelectorAll('.quick-btn').forEach(qb => {
+    const action = qb.dataset.quick;
+    const mappedKey = {
+      'door-left': 'doorLeft',
+      'door-right': 'doorRight',
+      'spin-wheels': 'spinWheels',
+    }[action];
+    if (mappedKey) {
+      qb.classList.toggle('active', !!state[mappedKey]);
+    }
+  });
+}
+
+function toggleSheet(expand) {
+  sheetExpanded = typeof expand === 'boolean' ? expand : !sheetExpanded;
+  bottomSheet.classList.toggle('expanded', sheetExpanded);
+  bottomSheet.classList.toggle('collapsed', !sheetExpanded);
+}
+
+function collapseSheet() {
+  sheetExpanded = false;
+  bottomSheet.classList.remove('expanded');
+  bottomSheet.classList.add('collapsed');
+}
+
+// Click handle to toggle
+sheetHandle.addEventListener('click', () => toggleSheet());
+
+// Tap canvas area to collapse sheet (only on quick taps, not drags)
+let canvasTapStart = 0;
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  canvasTapStart = Date.now();
+});
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (sheetExpanded && window.innerWidth <= 768 && Date.now() - canvasTapStart < 200) {
+    collapseSheet();
+    e.stopPropagation();
+  }
+  canvasTapStart = 0;
+});
+
+// Drag gesture on sheet handle
+sheetHandle.addEventListener('pointerdown', (e) => {
+  touchStartY = e.clientY;
+  sheetStartY = bottomSheet.getBoundingClientRect().top;
+  e.stopPropagation();
+});
+
+document.addEventListener('pointermove', (e) => {
+  if (touchStartY && window.innerWidth <= 768) {
+    const deltaY = e.clientY - touchStartY;
+    if (Math.abs(deltaY) > 10) {
+      if (deltaY > 40) collapseSheet();
+      else if (deltaY < -40) toggleSheet(true);
+    }
+  }
+});
+
+document.addEventListener('pointerup', () => {
+  touchStartY = 0;
+});
+
+// Swipe down in sheet content to collapse
+const sheetContent = document.querySelector('.sheet-content');
+sheetContent.addEventListener('pointerdown', (e) => {
+  if (sheetContent.scrollTop <= 0) {
+    touchStartY = e.clientY;
+  }
+});
+
+// Tab switching
+document.querySelectorAll('.sheet-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const paneId = tab.dataset.pane;
+    document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sheet-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(paneId).classList.add('active');
+    if (!sheetExpanded) toggleSheet(true);
+  });
+});
+
+// Quick action buttons
+document.querySelectorAll('.quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const action = btn.dataset.quick;
+    const desktopBtn = document.querySelector(`.btn[data-action="${action}"]`);
+    if (desktopBtn) desktopBtn.click();
+    btn.classList.toggle('active');
+  });
+});
+
+// Sync mobile color swatches - handled by unified click handler above
+
+// Sync mobile light slider
+const mobileLightSlider = document.getElementById('mobile-light-slider');
+mobileLightSlider.addEventListener('input', () => {
+  const val = parseInt(mobileLightSlider.value);
+  document.getElementById('mobile-light-val').textContent = val + '%';
+  document.getElementById('light-slider').value = val;
+  document.getElementById('light-val').textContent = val + '%';
+  const factor = val / 100;
+  keyLight.intensity = 8 * factor;
+  fillLight.intensity = 2 * factor;
+  rimLight.intensity = 4 * factor;
+  ambientLight.intensity = 1.5 * factor;
+  renderer.toneMappingExposure = 1.2 * factor;
+});
+
+// Mobile wireframe button
+document.getElementById('mobile-btn-wireframe').addEventListener('click', () => {
+  document.getElementById('btn-wireframe').click();
+  document.getElementById('mobile-btn-wireframe').classList.toggle('active', state.wireframe);
+});
+
+// Mobile screenshot
+document.getElementById('mobile-btn-screenshot').addEventListener('click', () => {
+  renderer.render(scene, camera);
+  const link = document.createElement('a');
+  link.download = 'car-concept-screenshot.png';
+  link.href = renderer.domElement.toDataURL('image/png');
+  link.click();
+});
+
+// Mobile fullscreen
+document.getElementById('mobile-btn-fullscreen').addEventListener('click', () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    document.body.requestFullscreen();
+  }
+});
+
+// Sync spec paint text
+const origApplyVariant = applyVariant;
+applyVariant = function(index) {
+  origApplyVariant(index);
+  const paintName = paintNames[index];
+  const mobileSpec = document.getElementById('mobile-spec-paint');
+  if (mobileSpec) mobileSpec.textContent = paintName;
+  document.getElementById('spec-paint').textContent = paintName;
+};
+
+// Sync mobile buttons with desktop state (call after toggle)
+const origBtnHandler = document.querySelectorAll('.btn[data-action]')[0]?.onclick;
 
 // Start
 animate();
