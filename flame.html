@@ -1,0 +1,387 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polished Burning Paper Showcase</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #0c0a09;
+      color: #f5f5f4;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Controls Interface */
+    .controls-panel {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      background-color: rgba(28, 25, 23, 0.95);
+      border: 1px solid #44403c;
+      padding: 16px 24px;
+      border-radius: 12px;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.5);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #a8a29e;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #e7e5e4;
+    }
+
+    .radio-option input {
+      accent-color: #ea580c;
+      cursor: pointer;
+    }
+
+    .speed-select {
+      background-color: #292524;
+      color: #f5f5f4;
+      border: 1px solid #57534e;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .speed-select:focus {
+      border-color: #ea580c;
+    }
+
+    .action-btn {
+      background-color: #ea580c;
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .action-btn:hover {
+      background-color: #f97316;
+    }
+
+    .action-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Target Paper Canvas Layout */
+    .paper-viewport {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: #f2ebd9;
+      color: #2c2519;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.06);
+      filter: url(#loose-blade-filter);
+    }
+
+    .paper-viewport::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: var(--ember-gradient, transparent);
+      mix-blend-mode: multiply;
+    }
+
+    .paper-content h1 {
+      font-family: Georgia, serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    .paper-content p {
+      font-size: 1.25rem;
+      line-height: 1.75;
+      max-width: 640px;
+      color: #443e34;
+    }
+
+    /* Overlay Renderers */
+    #ashCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 90;
+    }
+
+    .svg-def-hidden {
+      position: absolute;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Controls Configuration -->
+  <div class="controls-panel">
+    <div class="control-group">
+      <span class="control-label">Ignition Source:</span>
+      <label class="radio-option"><input type="radio" name="ignitionMode" value="top" checked> Top Edge</label>
+      <label class="radio-option"><input type="radio" name="ignitionMode" value="bottom"> Bottom Edge</label>
+      <label class="radio-option"><input type="radio" name="ignitionMode" value="center"> Center Core</label>
+    </div>
+    
+    <div class="control-group">
+      <span class="control-label">Speed:</span>
+      <select id="burnSpeedPicker" class="speed-select">
+        <option value="0.8">Slow Burn</option>
+        <option value="1.6" selected>Normal Fast</option>
+        <option value="3.0">Explosive Blaze</option>
+      </select>
+    </div>
+
+    <button class="action-btn" onclick="executeExactBurnout()">Trigger Burnout</button>
+  </div>
+
+  <!-- The Burnable Parchment Layer -->
+  <div id="paperCanvas" class="paper-viewport">
+    <div class="paper-content">
+      <h1>Exact Replica Template</h1>
+      <p>This version matches the precise multi-scale fractal mask logic used in the simulator. Adjust the speed picker to dynamically scale the propagation frame increments, shifting seamlessly from narrow ember ribbons to complete asset flush cleanups.</p>
+    </div>
+  </div>
+
+  <!-- Particle Simulation Layer -->
+  <canvas id="ashCanvas"></canvas>
+
+  <!-- True Loose Blade Fractal Distortion Vector -->
+  <svg class="svg-def-hidden" aria-hidden="true">
+    <defs>
+      <filter id="loose-blade-filter">
+        <feTurbulence type="fractalNoise" baseFrequency="0.007" numOctaves="4" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="90" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  </svg>
+
+  <script>
+    const paperCanvas = document.getElementById('paperCanvas');
+    const ashCanvas = document.getElementById('ashCanvas');
+    const ctx = ashCanvas.getContext('2d');
+    const speedPicker = document.getElementById('burnSpeedPicker');
+
+    let particles = [];
+    let progress = 0;
+    let isAnimating = false;
+    let loopId = null;
+
+    function handleResize() {
+      ashCanvas.width = window.innerWidth;
+      ashCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    class JaggedAshFlake {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 9 + 4;
+        this.vx = (Math.random() - 0.5) * 2.5;
+        this.vy = -(Math.random() * 3.5 + 2.5);
+        this.opacity = 1.0;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 0.15;
+        this.swaySeed = Math.random() * 100;
+        
+        // Asymmetrical polygon coordinate tracking
+        this.vertices = [];
+        const sides = Math.floor(Math.random() * 3) + 4;
+        for (let i = 0; i < sides; i++) {
+          const angle = (i / sides) * Math.PI * 2;
+          const variance = this.size * (0.5 + Math.random() * 0.5);
+          this.vertices.push({
+            x: Math.cos(angle) * variance,
+            y: Math.sin(angle) * variance
+          });
+        }
+      }
+
+      advance() {
+        this.x += this.vx + Math.sin(this.y * 0.015 + this.swaySeed) * 0.4;
+        this.y += this.vy;
+        this.rotation += this.rotationSpeed;
+        this.opacity -= 0.022; // Natural structural breakdown decay rate
+      }
+
+      render() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        
+        ctx.fillStyle = `rgba(32, 29, 27, ${this.opacity})`;
+        ctx.strokeStyle = `rgba(234, 88, 12, ${this.opacity * 0.5})`;
+        ctx.lineWidth = 1.2;
+
+        ctx.beginPath();
+        ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
+        for (let i = 1; i < this.vertices.length; i++) {
+          ctx.lineTo(this.vertices[i].x, this.vertices[i].y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.restore();
+      }
+    }
+
+    function injectEmberFlakes(mode, currentProgress) {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const clusterCount = 5;
+
+      for (let i = 0; i < clusterCount; i++) {
+        let x = Math.random() * w;
+        let y = 0;
+
+        if (mode === 'top') {
+          y = (currentProgress / 100) * h + (Math.random() - 0.5) * 16;
+        } else if (mode === 'bottom') {
+          y = h - (currentProgress / 100) * h + (Math.random() - 0.5) * 16;
+        } else if (mode === 'center') {
+          const radialBoundary = (currentProgress / 100) * Math.max(w, h) * 0.75;
+          const vectorAngle = Math.random() * Math.PI * 2;
+          x = (w / 2) + Math.cos(vectorAngle) * radialBoundary;
+          y = (h / 2) + Math.sin(vectorAngle) * radialBoundary;
+        }
+
+        if (x >= 0 && x <= w && y >= 0 && y <= h) {
+          particles.push(new JaggedAshFlake(x, y));
+        }
+      }
+    }
+
+    function applyErosionShaders(mode, p) {
+      let maskLayer = '';
+      let emberLayer = '';
+
+      // Tightly bounded structural limits enforcing a crisp ribbon frontier
+      if (mode === 'top') {
+        maskLayer = `linear-gradient(to bottom, transparent calc(${p}% - 4%), black calc(${p}% + 2%))`;
+        emberLayer = `linear-gradient(to bottom, transparent calc(${p}% - 6%), rgba(20,18,16,0.98) calc(${p}% - 2%), #ea580c calc(${p}% - 0.5%), #f97316 calc(${p}%), transparent calc(${p}% + 1%))`;
+      } else if (mode === 'bottom') {
+        const inverseProgress = 100 - p;
+        maskLayer = `linear-gradient(to top, transparent calc(${inverseProgress}% - 4%), black calc(${inverseProgress}% + 2%))`;
+        emberLayer = `linear-gradient(to top, transparent calc(${inverseProgress}% - 6%), rgba(20,18,16,0.98) calc(${inverseProgress}% - 2%), #ea580c calc(${inverseProgress}% - 0.5%), #f97316 calc(${inverseProgress}%), transparent calc(${inverseProgress}% + 1%))`;
+      } else if (mode === 'center') {
+        maskLayer = `radial-gradient(circle at center, transparent calc(${p}% - 4%), black calc(${p}% + 2%))`;
+        emberLayer = `radial-gradient(circle at center, transparent calc(${p}% - 6%), rgba(20,18,16,0.98) calc(${p}% - 2%), #ea580c calc(${p}% - 0.5%), #f97316 calc(${p}%), transparent calc(${p}% + 1%))`;
+
+      }
+
+      paperCanvas.style.webkitMaskImage = maskLayer;
+      paperCanvas.style.maskImage = maskLayer;
+      paperCanvas.style.setProperty('--ember-gradient', emberLayer);
+    }
+
+    function executeExactBurnout() {
+      if (isAnimating) return;
+      isAnimating = true;
+      progress = 0;
+      particles = [];
+      paperCanvas.style.visibility = 'visible';
+      paperCanvas.style.opacity = '1';
+
+      const configurationMode = document.querySelector('input[name="ignitionMode"]:checked').value;
+      const processingStepVelocity = parseFloat(speedPicker.value);
+
+      function paintCycle() {
+        progress += processingStepVelocity;
+        
+        applyErosionShaders(configurationMode, progress);
+        injectEmberFlakes(configurationMode, progress);
+
+        ctx.clearRect(0, 0, ashCanvas.width, ashCanvas.height);
+        
+        for (let i = particles.length - 1; i >= 0; i--) {
+          particles[i].advance();
+          if (particles[i].opacity <= 0) {
+            particles.splice(i, 1);
+          } else {
+            particles[i].render();
+          }
+        }
+
+        // Keep driving frames until mask sweeps clean AND all canvas structures decay to 0 opacity
+        if (progress < 135 || particles.length > 0) {
+          if (progress >= 135) {
+            paperCanvas.style.visibility = 'hidden';
+            paperCanvas.style.opacity = '0';
+          }
+          loopId = requestAnimationFrame(paintCycle);
+        } else {
+          // EXPLICIT RESIDUE FLUSH
+          ctx.clearRect(0, 0, ashCanvas.width, ashCanvas.height);
+          particles = [];
+          isAnimating = false;
+          cancelAnimationFrame(loopId);
+        }
+      }
+
+      paintCycle();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,571 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netrunner HUD // Terminal Terminal Breach</title>
+    <style>
+        :root {
+            --cyber-yellow: #fcee0a;
+            --cyber-cyan: #00f0ff;
+            --cyber-crimson: #ff003c;
+            --cyber-bg: #030305;
+            --cyber-panel: #0a0c10;
+            --cyber-border: #1a222d;
+            --font-hud: 'Courier New', Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--cyber-bg);
+            color: #fff;
+            font-family: var(--font-hud);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Scanline Overlay for Global CRT Feel */
+        body::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 999;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        /* Core Workspace Container */
+        .hud-container {
+            position: relative;
+            width: 1024px;
+            height: 576px;
+            background-color: var(--cyber-panel);
+            border: 1px solid var(--cyber-border);
+            display: grid;
+            grid-template-rows: 40px 1fr;
+            padding: 10px;
+            gap: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* WebGL Layer - Positioned directly underneath layout controls */
+        #glcanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* HUD Control Interface Layer */
+        .hud-ui {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Header / Telemetry Row */
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(10, 12, 16, 0.85);
+            border-bottom: 2px solid var(--cyber-cyan);
+            padding: 0 10px;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        .telemetry-group {
+            display: flex;
+            gap: 20px;
+        }
+
+        .status-tag {
+            color: var(--cyber-yellow);
+            font-weight: bold;
+            animation: pulse 1s infinite alternate;
+        }
+
+        /* Main Workspace Grid Split */
+        .hud-main {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 10px;
+            flex-grow: 1;
+            height: calc(100% - 40px);
+        }
+
+        /* Left Workspace Element Placeholder Frame */
+        .workspace-view {
+            border: 1px dashed rgba(0, 240, 255, 0.3);
+            background: rgba(3, 3, 5, 0.4);
+            position: relative;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Chamfered Datashard Card Structure */
+        .datashard-card {
+            background: rgba(15, 20, 28, 0.9);
+            border-left: 3px solid var(--cyber-crimson);
+            clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%);
+            border: 1px solid var(--cyber-border);
+            border-left: 4px solid var(--cyber-crimson);
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            gap: 12px;
+        }
+
+        .card-title {
+            color: var(--cyber-crimson);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            border-bottom: 1px dashed rgba(255,0,60,0.3);
+            padding-bottom: 5px;
+        }
+
+        .diagnostic-log {
+            font-size: 10px;
+            color: #8fa3b3;
+            line-height: 1.5;
+            height: 180px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        .log-line {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .log-line.alert {
+            color: var(--cyber-yellow);
+        }
+
+        /* Progress Bar Modules */
+        .buffer-module {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 10px;
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 6px;
+            background: #11151c;
+            border: 1px solid #232e3d;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: var(--cyber-cyan);
+            width: 45%;
+            transition: width 0.1s ease;
+        }
+
+        .bar-fill.crimson {
+            background: var(--cyber-crimson);
+        }
+
+        /* Action Controls Layout */
+        .controls-pane {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        /* Cyberpunk Chamfered Action Button Layout */
+        .cyber-btn {
+            background: transparent;
+            border: 1px solid var(--cyber-cyan);
+            color: var(--cyber-cyan);
+            padding: 10px 15px;
+            font-family: var(--font-hud);
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-align: left;
+            cursor: pointer;
+            position: relative;
+            clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+            transition: all 0.15s ease;
+        }
+
+        .cyber-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 3px; height: 100%;
+            background: var(--cyber-cyan);
+        }
+
+        .cyber-btn:hover {
+            background: rgba(0, 240, 255, 0.1);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+
+        .cyber-btn.primary {
+            border-color: var(--cyber-yellow);
+            color: var(--cyber-yellow);
+        }
+        .cyber-btn.primary::before { background: var(--cyber-yellow); }
+        .cyber-btn.primary:hover { background: rgba(252, 238, 10, 0.1); box-shadow: 0 0 10px rgba(252, 238, 10, 0.4); }
+
+        .cyber-btn.danger {
+            border-color: var(--cyber-crimson);
+            color: var(--cyber-crimson);
+        }
+        .cyber-btn.danger::before { background: var(--cyber-crimson); }
+        .cyber-btn.danger:hover { background: rgba(255, 0, 60, 0.1); box-shadow: 0 0 10px rgba(255, 0, 60, 0.4); }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hud-container">
+        <!-- Render Target Canvas Pipeline -->
+        <canvas id="glcanvas"></canvas>
+
+        <!-- Dynamic Content UI Frame Overlay -->
+        <div class="hud-ui">
+            <header class="hud-header">
+                <div>ARASAKA_NETLINK_V4.022 // SUB-NEURAL LAYER</div>
+                <div class="telemetry-group">
+                    <div>LATENCY: <span id="hud-ping">22ms</span></div>
+                    <div>MEM_BUFFER: <span id="hud-mem">RAW_PACKETS</span></div>
+                    <div class="status-tag">SUBNET_READY</div>
+                </div>
+            </header>
+
+            <div class="hud-main">
+                <!-- System Vector Content Blueprint Area -->
+                <div class="workspace-view">
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.4)">WORKSPACE_FEED // NODE_0X49F</div>
+                    <div style="font-size: 48px; font-weight: 900; color: rgba(0,240,255,0.06); letter-spacing: -2px;">NETRUNNER_INIT</div>
+                    <div style="font-size: 10px; color: var(--cyber-cyan); max-width: 400px; line-height: 1.4;">
+                        WARNING: Unauthorized compilation execution detected within Arasaka Internal Mainframes. Diagnostic sweeps loop tracing metrics indefinitely.
+                    </div>
+                </div>
+
+                <!-- Control Console Card Module Deck -->
+                <div class="datashard-card interactive">
+                    <div class="card-title">CORRUPTED_DATASHARD</div>
+                    
+                    <div class="buffer-module">
+                        <div>BIO-MONITOR STABILITY RATE</div>
+                        <div class="bar-container"><div class="bar-fill" id="bar-bio" style="width: 88%"></div></div>
+                    </div>
+
+                    <div class="buffer-module">
+                        <div>DATA DISSOLUTION PROGRESSION</div>
+                        <div class="bar-container"><div class="bar-fill crimson" id="bar-dissolve" style="width: 0%"></div></div>
+                    </div>
+
+                    <div class="diagnostic-log" id="log-box">
+                        <!-- Instantiated via Javascript core loops -->
+                    </div>
+
+                    <div class="controls-pane">
+                        <button class="cyber-btn primary" id="btn-sync">INITIALIZE TEAR SYNC</button>
+
+                        <button class="cyber-btn" id="btn-purge">PURGE LAYER CACHE</button>
+                        <button class="cyber-btn danger" id="btn-disconnect">FORCE DISCONNECT</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- WebGL Shader Program Engine Setup ---
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+        if (!gl) {
+            console.error("WebGL context not supported by hardware initialization profiles.");
+        }
+
+        // Vertex Shader Source (Standard normalized geometric coordinate mapping passes)
+        const vsSource = `#version 300 es
+            in vec2 position;
+            out vec2 vTexCoord;
+            void main() {
+                vTexCoord = position * 0.5 + 0.5;
+                vTexCoord.y = 1.0 - vTexCoord.y; // Match screen space layout direction
+                gl_Position = vec4(position, 0.0, 1.0);
+            }`;
+
+        // Fragment Shader Source (Asynchronous Horizontal Tearing, RGB Splitting & Noise)
+        const fsSource = `#version 300 es
+            precision highp float;
+            in vec2 vTexCoord;
+            out vec4 fragColor;
+
+            uniform float uTime;
+            uniform float uGlitchIntensity;
+            uniform float uDissolveProgress;
+
+            // Quasi-random noise helper calculation
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+            }
+
+            void main() {
+                vec2 uv = vTexCoord;
+                
+                // 1. Asynchronous Horizontal Slice Displacement Mechanics
+                if (uGlitchIntensity > 0.01) {
+                    float sliceY = floor(uv.y * 25.0); // Split coordinate space horizontally into block blocks
+                    float sliceHash = hash(vec2(sliceY, floor(uTime * 15.0)));
+                    
+                    if (sliceHash < uGlitchIntensity * 0.7) {
+                        // Displace row coordinate data on a high-frequency sweep
+                        uv.x += (hash(vec2(sliceY, uTime)) - 0.5) * 0.12 * uGlitchIntensity;
+                    }
+                }
+
+                // 2. Diagonal Dissolution Wave Front Calculations
+                // Maps a line path advancing based on uDissolveProgress
+                float diagonalLine = uv.x + uv.y * 0.5; 
+                float waveThreshold = uDissolveProgress * 1.5; 
+                
+                // Color channel declarations
+                vec4 col = vec4(0.0);
+                
+                if (diagonalLine < waveThreshold) {
+                    // Signal is decaying/dissolving into phosphor noise block packets
+                    float noiseElement = hash(uv + vec2(uTime));
+                    if (noiseElement > 0.3) {
+                        // Alternate between neon cyan, yellow and deep red artifacts
+                        if (hash(vec2(floor(uv.y*80.0), floor(uTime*30.0))) > 0.5) {
+                            col = vec4(0.0, 0.94, 1.0, 1.0); // Cyan shard packet
+                        } else {
+                            col = vec4(1.0, 0.0, 0.23, 1.0); // Crimson block trace
+                        }
+                    } else {
+                        col = vec4(0.01, 0.01, 0.02, 1.0); // Dead obsidian backdrop
+                    }
+                } else {
+                    // 3. Chromatic Aberration Channel Isolation Pipeline
+                    float rOffset = 0.015 * uGlitchIntensity;
+                    float bOffset = -0.010 * uGlitchIntensity;
+
+                    // Draw abstract grid blocks inside the WebGL context layer to manipulate
+                    float basePattern = step(0.93, fract(uv.x * 6.0 + sin(uv.y * 2.0))) * 0.15;
+                    basePattern += step(0.97, fract(uv.y * 12.0)) * 0.1;
+
+                    col.r = basePattern + step(0.4, fract(uv.x * 2.0 + rOffset));
+                    col.g = basePattern + step(0.4, fract(uv.x * 2.0));
+                    col.b = basePattern + step(0.4, fract(uv.x * 2.0 + bOffset));
+                    col.a = 0.15 + (uGlitchIntensity * 0.4); // Become more concrete visually during systemic disruptions
+                }
+
+                // Global CRT Phosphor noise grain blend
+                float grain = (hash(uv + uTime) - 0.5) * 0.08;
+                col.rgb += vec3(grain);
+
+                fragColor = col;
+            }`;
+
+        // Helper initialization module for shader objects
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error("Could not link WebGL core shader matrix pipeline configuration profiles.");
+        }
+
+        // Geometry Buffer mapping layout
+        const positionAttributeLocation = gl.getAttribLocation(program, "position");
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,   1, -1,  -1,  1,
+            -1,  1,   1, -1,   1,  1,
+        ]), gl.STATIC_DRAW);
+
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        gl.enableVertexAttribArray(positionAttributeLocation);
+        gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+        // Locating uniform parameters within program memory
+        const timeUniformLocation = gl.getUniformLocation(program, "uTime");
+        const glitchUniformLocation = gl.getUniformLocation(program, "uGlitchIntensity");
+        const dissolveUniformLocation = gl.getUniformLocation(program, "uDissolveProgress");
+
+        let glitchIntensity = 0.0;
+        let dissolveProgress = 0.0;
+        let targetGlitch = 0.0;
+        let isTransitioning = false;
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Main WebGL Frame Render Loop Execution Profile
+        function render(time) {
+            time *= 0.001; // Convert system ticks to clean float timestamp offsets
+
+            // Interpolate metrics smoothly towards intended target points
+            glitchIntensity += (targetGlitch - glitchIntensity) * 0.2;
+
+            if (isTransitioning) {
+                dissolveProgress += 0.015;
+                if (dissolveProgress > 1.2) {
+                    // Reset matrix variables back around once limits breached
+                    isTransitioning = false;
+                    targetGlitch = 0.0;
+                    dissolveProgress = 0.0;
+                    document.getElementById('bar-dissolve').style.width = `0%`;
+                } else {
+                    document.getElementById('bar-dissolve').style.width = `${Math.min(100, dissolveProgress * 100)}%`;
+                }
+            }
+
+            gl.clearColor(0.0, 0.0, 0.0, 0.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.useProgram(program);
+            gl.bindVertexArray(vao);
+
+            gl.uniform1f(timeUniformLocation, time);
+            gl.uniform1f(glitchUniformLocation, glitchIntensity);
+            gl.uniform1f(dissolveUniformLocation, dissolveProgress);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            requestAnimationFrame(render);
+        }
+        requestAnimationFrame(render);
+
+
+        // --- UI Logic, Terminal Telemetry & Control Arrays ---
+        const logBox = document.getElementById('log-box');
+        const pingIndicator = document.getElementById('hud-ping');
+        const bioBar = document.getElementById('bar-bio');
+
+        const logPool = [
+            "NET_LINK: Establishing encrypted handshake...",
+            "BUFFER_TRACE: Processing matrix payload packets...",
+            "SUBNET: Access sequence verified by local nodes.",
+            "ALERT: Intrusion counter-measures active within block.",
+            "CRITICAL: System temperature boundaries expanding...",
+            "DATA_FLUSH: Memory blocks routing via fallback servers.",
+            "SYS_LOG: Purging trace credentials from network tables."
+        ];
+
+        function pushLog(text, isAlert = false) {
+            const line = document.createElement('div');
+            line.className = `log-line ${isAlert ? 'alert' : ''}`;
+            line.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+            logBox.appendChild(line);
+            if (logBox.children.length > 25) {
+                logBox.removeChild(logBox.children[0]);
+            }
+        }
+
+        // Continuously generate realistic telemetry fluctuations
+        setInterval(() => {
+            // Fluctuating network ping metrics
+            pingIndicator.innerText = `${Math.floor(15 + Math.random() * 25)}ms`;
+            
+            // Random jitter within the biological loop trace metrics
+            bioBar.style.width = `${Math.floor(75 + Math.random() * 15)}%`;
+
+            // Spontaneously push background terminal status updates
+            if (Math.random() > 0.4 && !isTransitioning) {
+
+                pushLog(logPool[Math.floor(Math.random() * logPool.length)]);
+            }
+
+            // Occasional micro-glitch spike bursts for ambient aesthetic maintenance
+            if (Math.random() > 0.85 && !isTransitioning) {
+                targetGlitch = 0.25;
+                setTimeout(() => { if(!isTransitioning) targetGlitch = 0.0; }, 120);
+            }
+        }, 1000);
+
+        // Bind interactive event hooks across UI button modules
+        document.getElementById('btn-sync').addEventListener('click', () => {
+            if (isTransitioning) return;
+            isTransitioning = true;
+            targetGlitch = 0.85; // Violent tear intensity profile
+            pushLog("SYS_CRITICAL: INITIALIZING LAYER DISPLACEMENT SYNC...", true);
+        });
+
+        document.getElementById('btn-purge').addEventListener('click', () => {
+            targetGlitch = 0.5;
+            pushLog("COMMAND: FLUSHING LAYER LOCAL MEMORY SYSTEM CACHE...", false);
+            setTimeout(() => { targetGlitch = 0.0; }, 350);
+        });
+
+        document.getElementById('btn-disconnect').addEventListener('click', () => {
+            targetGlitch = 1.0;
+            pushLog("FATAL_ERROR: ENFORCING HARDWARE LINK NETWORK DISCONNECT...", true);
+            setTimeout(() => { targetGlitch = 0.0; }, 500);
+        });
+
+        // Initialize logging frame baseline data
+        pushLog("ARASAKA NETLINK CORE SUBSYSTEM ONLINE...");
+        pushLog("STANDBY // WAITING FOR TERMINAL INSTRUCTION TRANSITIONS...");
+    </script>
+</body>
+</html>
