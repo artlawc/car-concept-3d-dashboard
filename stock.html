@@ -1,0 +1,603 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced Split-Panel Engine with Dual Anchors and Trade Alerts</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0f1115;
+      color: #e4e6eb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      user-select: none;
+    }
+    .dashboard {
+      width: 960px;
+      background-color: #161a22;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      border: 1px solid #2a2f3a;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .title-area h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.5px;
+    }
+    .title-area span {
+      font-size: 12px;
+      color: #848e9c;
+    }
+    .controls-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .btn-group {
+      display: flex;
+      gap: 4px;
+      background-color: #0b0e11;
+      padding: 4px;
+      border-radius: 6px;
+    }
+    button {
+      background: transparent;
+      color: #848e9c;
+      border: none;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    button:hover, button.active {
+      color: #fff;
+    }
+    button.active {
+      background-color: #2b3139;
+      color: #f0b90b;
+    }
+    button.action-btn {
+      background-color: #2b3139;
+      border: 1px solid #474f59;
+      color: #e4e6eb;
+    }
+    button.action-btn:hover {
+      background-color: #363c4e;
+      border-color: #848e9c;
+    }
+    button.accent-btn {
+      background-color: #f0b90b;
+      color: #000;
+      font-weight: bold;
+    }
+    button.accent-btn:hover {
+      background-color: #ffe066;
+    }
+    canvas {
+      background-color: #161a22;
+      display: block;
+      cursor: crosshair;
+    }
+    .indicators-panel {
+      margin-top: 12px;
+      background-color: #0b0e11;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: monospace;
+      font-size: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      border: 1px solid #2a2f3a;
+    }
+    .label { color: #848e9c; }
+    .val-up { color: #26a69a; font-weight: bold; }
+    .val-down { color: #ef5350; font-weight: bold; }
+    .val-neutral { color: #f0b90b; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  <div class="header">
+    <div class="title-area">
+      <h2>BTC / USDT <span id="tickerPrice">Loading...</span></h2>
+      <span>Dual Anchor Range Tool & Algorithmic Cross Alert Triggers</span>
+    </div>
+    <div class="controls-wrapper">
+      <button class="accent-btn" onclick="triggerMarketCycle()">⚡ Wave Cycle</button>
+      <button class="action-btn" id="toggleDrawBtn" onclick="toggleDrawMode()">✏️ Draw Mode: OFF</button>
+      <button class="action-btn" onclick="resetView()">🔄 Clear & Reset</button>
+      <div class="btn-group" id="timeframes">
+        <button class="active" onclick="setTimeframe('1D')">1D</button>
+        <button onclick="setTimeframe('5D')">5D</button>
+        <button onclick="setTimeframe('1M')">1M</button>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="financialChart" width="960" height="520"></canvas>
+  
+  <div class="indicators-panel">
+    <div id="ohlcPanel"><span class="label">CANDLE/RANGE:</span> Double-click twice to define a target zone...</div>
+    <div id="mathPanel"><span class="label">ALERTS/TRACKS:</span> Monitoring cross parameters.</div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('financialChart');
+  const ctx = canvas.getContext('2d');
+  const tickerPriceEl = document.getElementById('tickerPrice');
+  const ohlcPanel = document.getElementById('ohlcPanel');
+  const mathPanel = document.getElementById('mathPanel');
+
+  // Math Moving Average Pipeline
+  function calculateEMA(data, period) {
+    let ema = new Array(data.length).fill(0);
+    if (data.length === 0) return ema;
+    let sum = 0;
+    for(let i = 0; i < Math.min(period, data.length); i++) sum += data[i].close;
+    ema[Math.min(period, data.length) - 1] = sum / Math.min(period, data.length);
+    const k = 2 / (period + 1);
+    for (let i = period; i < data.length; i++) {
+      ema[i] = data[i].close * k + ema[i - 1] * (1 - k);
+    }
+    return ema;
+  }
+
+  function enrichTechnicalIndicators(candles) {
+    if (candles.length < 14) return;
+    
+    // RSI (14)
+    let gains = 0, losses = 0;
+    for (let i = 1; i <= 14; i++) {
+      let diff = candles[i].close - candles[i - 1].close;
+      if (diff > 0) gains += diff; else losses -= diff;
+    }
+    let avgGain = gains / 14;
+    let avgLoss = losses / 14;
+    candles.rsi = 50;
+    
+    for (let i = 1; i < candles.length; i++) {
+      if (i <= 14) {
+        candles[i].rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + (avgGain / avgLoss)));
+      } else {
+        let diff = candles[i].close - candles[i - 1].close;
+        avgGain = (avgGain * 13 + (diff > 0 ? diff : 0)) / 14;
+        avgLoss = (avgLoss * 13 + (diff < 0 ? -diff : 0)) / 14;
+        candles[i].rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + (avgGain / avgLoss)));
+      }
+    }
+
+    // MACD (12, 26, 9)
+    const ema12 = calculateEMA(candles, 12);
+    const ema26 = calculateEMA(candles, 26);
+    let macdLine = new Array(candles.length).fill(0);
+    for (let i = 0; i < candles.length; i++) macdLine[i] = ema12[i] - ema26[i];
+    
+    let signalLine = new Array(candles.length).fill(0);
+    let sumMacd = 0;
+    const initialBound = Math.min(34, candles.length);
+    for(let i = 25; i < initialBound; i++) sumMacd += macdLine[i];
+    
+    if(candles.length >= 26) {
+      signalLine[Math.min(33, candles.length - 1)] = sumMacd / 9;
+      const k = 2 / (9 + 1);
+      for(let i = 34; i < candles.length; i++) {
+        signalLine[i] = macdLine[i] * k + signalLine[i - 1] * (1 - k);
+      }
+    }
+
+    // Assign & Run Real-time Alert Signal Generator
+    for(let i = 0; i < candles.length; i++) {
+      candles[i].macd = macdLine[i] || 0;
+      candles[i].signal = signalLine[i] || 0;
+      candles[i].histogram = (candles[i].macd - candles[i].signal) || 0;
+      
+      // Clear alert properties unless evaluating crosses
+      candles[i].alert = null;
+      if (i > 0) {
+        let prevHist = candles[i-1].histogram;
+        let currHist = candles[i].histogram;
+        
+        // Bullish Crossover alert logic
+        if (prevHist <= 0 && currHist > 0) {
+          candles[i].alert = "BUY";
+        }
+        // Bearish Crossover alert logic
+        else if (prevHist >= 0 && currHist < 0) {
+          candles[i].alert = "SELL";
+        }
+      }
+    }
+  }
+
+  function generateMockData(count, basePrice) {
+    let arr = [];
+    let curr = basePrice;
+    for (let i = 0; i < count; i++) {
+      let open = curr + (Math.random() * 20 - 10);
+      let close = open + (Math.random() * 16 - 8);
+      arr.push({
+        open: open, high: Math.max(open, close) + Math.random() * 6,
+        low: Math.min(open, close) - Math.random() * 6, close: close,
+        targetOpen: open, targetHigh: Math.max(open, close) + Math.random() * 6,
+        targetLow: Math.min(open, close) - Math.random() * 6, targetClose: close,
+        rsi: 50, macd: 0, signal: 0, histogram: 0, alert: null
+      });
+      curr = close;
+    }
+    enrichTechnicalIndicators(arr);
+    return arr;
+  }
+
+  let datasets = { '1D': generateMockData(60, 2500), '5D': generateMockData(110, 2450), '1M': generateMockData(180, 2300) };
+  let currentRange = '1D';
+  let rawData = datasets[currentRange];
+  
+  // Transform & Tool States
+  let viewScaleX = 1.0;
+  let viewOffsetX = 0.0;
+  let isDragging = false, startDragX = 0, startOffsetX = 0;
+  let hoveredCandle = null;
+  let cycleInterval = null;
+  let isDrawMode = false;
+  let lastClickTime = 0;
+  
+  // Dual Range Anchors Tracking Indexes
+  let anchor1 = null;
+  let anchor2 = null;
+
+  // Layout Configuration
+  const layout = { left: 20, right: 70, padding: 15 };
+  const graphWidth = canvas.width - layout.left - layout.right;
+  
+  const panels = {
+    candle: { top: 20, height: 240 },
+    macd:   { top: 285, height: 95 },
+    rsi:    { top: 405, height: 85 }
+  };
+
+  function setTimeframe(range) {
+    currentRange = range; rawData = datasets[range];
+    document.querySelectorAll('#timeframes button').forEach(b => b.classList.remove('active'));
+    if (window.event && window.event.target) window.event.target.classList.add('active');
+    resetView();
+  }
+
+  function toggleDrawMode() {
+    isDrawMode = !isDrawMode;
+    document.getElementById('toggleDrawBtn').innerText = isDrawMode ? "✏️ Draw Mode: ON" : "✏️ Draw Mode: OFF";
+    document.getElementById('toggleDrawBtn').style.borderColor = isDrawMode ? "#f0b90b" : "#474f59";
+  }
+
+  function resetView() {
+    viewScaleX = 1.0; viewOffsetX = 0.0; hoveredCandle = null; 
+    anchor1 = null; anchor2 = null;
+    ohlcPanel.innerHTML = `<span class="label">CANDLE/RANGE:</span> Double-click twice to define a target zone...`;
+    mathPanel.innerHTML = `<span class="label">ALERTS/TRACKS:</span> Monitoring cross parameters.`;
+  }
+
+  function triggerMarketCycle() {
+    if (cycleInterval) { clearInterval(cycleInterval); cycleInterval = null; return; }
+    let ticks = 0;
+    cycleInterval = setInterval(() => {
+      ticks++;
+      const last = rawData[rawData.length - 1];
+      let wave = Math.sin((ticks / 35) * Math.PI) * 15;
+      last.targetClose += wave + (Math.random() * 4 - 2);
+      last.targetHigh = Math.max(last.targetHigh, last.targetClose);
+      last.targetLow = Math.min(last.targetLow, last.targetClose);
+
+      if (ticks % 5 === 0) {
+
+        enrichTechnicalIndicators(rawData);
+        const nextOpen = last.close;
+        rawData.shift();
+        rawData.push({
+          open: nextOpen, high: nextOpen, low: nextOpen, close: nextOpen,
+          targetOpen: nextOpen, targetHigh: nextOpen, targetLow: nextOpen, targetClose: nextOpen,
+          rsi: 50, macd: 0, signal: 0, histogram: 0, alert: null
+        });
+        
+        // Push index positions left safely to handle trailing window deletion
+        if (anchor1 !== null) anchor1--;
+        if (anchor2 !== null) anchor2--;
+        if (anchor1 < 0) anchor1 = null;
+        if (anchor2 < 0) anchor2 = null;
+      }
+      if (ticks >= 70) { clearInterval(cycleInterval); cycleInterval = null; }
+    }, 100);
+  }
+
+  function updateAnimations() {
+    rawData.forEach(c => {
+      c.open += (c.targetOpen - c.open) * 0.25;
+      c.high += (c.targetHigh - c.high) * 0.25;
+      c.low += (c.targetLow - c.low) * 0.25;
+      c.close += (c.targetClose - c.close) * 0.25;
+    });
+    enrichTechnicalIndicators(rawData);
+  }
+
+  function draw() {
+    updateAnimations();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let minPrice = Infinity, maxPrice = -Infinity;
+    let minMacd = Infinity, maxMacd = -Infinity;
+    rawData.forEach(c => {
+      if (c.low < minPrice) minPrice = c.low; if (c.high > maxPrice) maxPrice = c.high;
+      let ext = Math.max(Math.abs(c.macd), Math.abs(c.signal), Math.abs(c.histogram));
+      if (ext > maxMacd) maxMacd = ext;
+    });
+    minPrice -= (maxPrice - minPrice) * 0.05; maxPrice += (maxPrice - minPrice) * 0.05;
+    minMacd = -maxMacd * 1.1; maxMacd = maxMacd * 1.1; 
+
+    if (minMacd === 0 && maxMacd === 0) { minMacd = -1; maxMacd = 1; }
+
+    const totalWidth = graphWidth * viewScaleX;
+    const baseW = graphWidth / rawData.length;
+
+    // PANEL 1: CANDLESTICK GRID
+    ctx.strokeStyle = '#222630'; ctx.lineWidth = 1; ctx.fillStyle = '#848e9c'; ctx.font = '10px sans-serif';
+    for (let i = 0; i <= 4; i++) {
+      let y = panels.candle.top + (i / 4) * panels.candle.height;
+      let price = maxPrice - (i / 4) * (maxPrice - minPrice);
+      ctx.beginPath(); ctx.moveTo(layout.left, y); ctx.lineTo(canvas.width - layout.right, y); ctx.stroke();
+      ctx.fillText(price.toFixed(1), canvas.width - layout.right + 8, y + 3);
+    }
+
+    // PANEL 2: MACD GRID
+    for(let i = 0; i <= 2; i++) {
+      let y = panels.macd.top + (i / 2) * panels.macd.height;
+      let val = maxMacd - (i / 2) * (maxMacd - minMacd);
+      ctx.strokeStyle = (i === 1) ? '#474f59' : '#1f242e';
+      ctx.beginPath(); ctx.moveTo(layout.left, y); ctx.lineTo(canvas.width - layout.right, y); ctx.stroke();
+      ctx.fillText(val.toFixed(2), canvas.width - layout.right + 8, y + 3);
+    }
+
+    // PANEL 3: RSI GRID (Using a string split approach to bypass markdown deletion bugs)
+    const rsiLevels = "30,50,70".split(",").map(Number);
+    ctx.strokeStyle = '#1f242e';
+    ctx.fillText("100", canvas.width - layout.right + 8, panels.rsi.top + 3);
+    ctx.fillText("0", canvas.width - layout.right + 8, panels.rsi.top + panels.rsi.height + 3);
+    rsiLevels.forEach(lvl => {
+      let y = panels.rsi.top + (1 - (lvl / 100)) * panels.rsi.height;
+      ctx.strokeStyle = (lvl === 50) ? '#2b3139' : 'rgba(240, 185, 11, 0.15)';
+      ctx.beginPath(); ctx.moveTo(layout.left, y); ctx.lineTo(canvas.width - layout.right, y); ctx.stroke();
+      ctx.fillText(lvl.toString(), canvas.width - layout.right + 8, y + 3);
+    });
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(layout.left, 0, graphWidth, canvas.height); ctx.clip();
+
+    // RENDER HIGHLIGHTED TARGET ZONE RANGE IF BOTH ANCHORS ARE ASSIGNED
+    if (anchor1 !== null && anchor2 !== null) {
+      let startIdx = Math.min(anchor1, anchor2);
+      let endIdx = Math.max(anchor1, anchor2);
+      let xStart = layout.left + (startIdx / rawData.length) * totalWidth + viewOffsetX;
+      let xEnd = layout.left + (endIdx / rawData.length) * totalWidth + viewOffsetX + (baseW * viewScaleX);
+      
+      ctx.fillStyle = 'rgba(240, 185, 11, 0.05)';
+      ctx.fillRect(xStart, 0, xEnd - xStart, canvas.height);
+      
+      // Boundary dotted lines
+      ctx.strokeStyle = 'rgba(240, 185, 11, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(xStart, 0); ctx.lineTo(xStart, canvas.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(xEnd, 0); ctx.lineTo(xEnd, canvas.height); ctx.stroke();
+    }
+
+    // Elements render
+    rawData.forEach((c, idx) => {
+      const cx = layout.left + (idx / rawData.length) * totalWidth + viewOffsetX + (baseW * viewScaleX) / 2;
+      const isBull = c.close >= c.open;
+      const clr = isBull ? '#26a69a' : '#ef5350';
+      const w = Math.max(1, (baseW * viewScaleX) * 0.7);
+
+      // Candles
+      let yO = panels.candle.top + (1 - (c.open - minPrice)/(maxPrice - minPrice)) * panels.candle.height;
+      let yC = panels.candle.top + (1 - (c.close - minPrice)/(maxPrice - minPrice)) * panels.candle.height;
+      let yH = panels.candle.top + (1 - (c.high - minPrice)/(maxPrice - minPrice)) * panels.candle.height;
+      let yL = panels.candle.top + (1 - (c.low - minPrice)/(maxPrice - minPrice)) * panels.candle.height;
+      
+      ctx.strokeStyle = clr; ctx.lineWidth = Math.max(1, viewScaleX * 0.5);
+      ctx.beginPath(); ctx.moveTo(cx, yH); ctx.lineTo(cx, yL); ctx.stroke();
+      ctx.fillStyle = clr; ctx.fillRect(cx - w/2, Math.min(yO, yC), w, Math.max(1, Math.abs(yO - yC)));
+
+      // MACD Histogram
+      let yZeroMacd = panels.macd.top + (maxMacd / (maxMacd - minMacd)) * panels.macd.height;
+      let yHist = panels.macd.top + (1 - (c.histogram - minMacd)/(maxMacd - minMacd)) * panels.macd.height;
+      ctx.fillStyle = c.histogram >= 0 ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)';
+      ctx.fillRect(cx - w/2, Math.min(yZeroMacd, yHist), w, Math.max(1, Math.abs(yZeroMacd - yHist)));
+
+      // Render Algorithmic Signal Tag Indicators directly onto the Grid Viewport
+      if (c.alert) {
+        ctx.fillStyle = c.alert === "BUY" ? "#26a69a" : "#ef5350";
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "center";
+        let yTag = c.alert === "BUY" ? yL + 12 : yH - 6;
+        ctx.fillText(c.alert, cx, Math.max(panels.candle.top + 8, Math.min(yTag, panels.candle.top + panels.candle.height - 4)));
+      }
+
+      // Individual Anchor Pin Highlighters
+      if (hoveredCandle === c || anchor1 === idx || anchor2 === idx) {
+        ctx.strokeStyle = (anchor1 === idx || anchor2 === idx) ? '#f0b90b' : 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = (anchor1 === idx || anchor2 === idx) ? 2 : 1;
+        ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.stroke();
+      }
+    });
+
+    // Trend Lines Rendering
+    if (isDrawMode) {
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let macdStarted = false;
+      rawData.forEach((c, idx) => {
+        const cx = layout.left + (idx / rawData.length) * totalWidth + viewOffsetX + (baseW * viewScaleX) / 2;
+        let y = panels.macd.top + (1 - (c.macd - minMacd)/(maxMacd - minMacd)) * panels.macd.height;
+        if (idx < 25) return; 
+        if (!macdStarted) { ctx.moveTo(cx, y); macdStarted = true; } else ctx.lineTo(cx, y);
+      });
+      ctx.strokeStyle = '#3b82f6'; ctx.stroke();
+
+      ctx.beginPath();
+      let signalStarted = false;
+      rawData.forEach((c, idx) => {
+        const cx = layout.left + (idx / rawData.length) * totalWidth + viewOffsetX + (baseW * viewScaleX) / 2;
+        let y = panels.macd.top + (1 - (c.signal - minMacd)/(maxMacd - minMacd)) * panels.macd.height;
+        if (idx < 33) return; 
+        if (!signalStarted) { ctx.moveTo(cx, y); signalStarted = true; } else ctx.lineTo(cx, y);
+      });
+      ctx.strokeStyle = '#f97316'; ctx.stroke();
+
+      ctx.beginPath();
+      let rsiStarted = false;
+      rawData.forEach((c, idx) => {
+        const cx = layout.left + (idx / rawData.length) * totalWidth + viewOffsetX + (baseW * viewScaleX) / 2;
+        let y = panels.rsi.top + (1 - (c.rsi / 100)) * panels.rsi.height;
+        if (idx < 14) return; 
+        if (!rsiStarted) { ctx.moveTo(cx, y); rsiStarted = true; } else ctx.lineTo(cx, y);
+      });
+      ctx.strokeStyle = '#a855f7'; ctx.stroke();
+    }
+
+    ctx.restore();
+
+    ctx.fillStyle = '#161a22';
+    ctx.fillRect(0, 0, layout.left, canvas.height);
+    ctx.fillRect(canvas.width - layout.right, 0, layout.right, canvas.height);
+
+    if(rawData.length > 1) {
+      const currentPrice = rawData[rawData.length - 1].close;
+      tickerPriceEl.innerText = `$${currentPrice.toFixed(2)}`;
+      tickerPriceEl.style.color = currentPrice >= rawData[rawData.length - 2].close ? '#26a69a' : '#ef5350';
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function parseMouseTarget(mx) {
+    if (mx < layout.left || mx > canvas.width - layout.right) return null;
+    const idx = Math.floor(((mx - layout.left - viewOffsetX) / (graphWidth * viewScaleX)) * rawData.length);
+    return (idx >= 0 && idx < rawData.length) ? { candle: rawData[idx], index: idx } : null;
+  }
+
+  // Interactivity Handlers
+  canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const now = Date.now();
+
+    // Dual Anchor Cycle Assignment via Double-Clicks
+    if (now - lastClickTime < 280) {
+      const match = parseMouseTarget(mx);
+      if (match) {
+        if (anchor1 === null) {
+          anchor1 = match.index;
+        } else if (anchor2 === null) {
+          anchor2 = match.index;
+          calculateRangeMetrics();
+        } else {
+          anchor1 = match.index;
+          anchor2 = null;
+        }
+      }
+    } else {
+      isDragging = true;
+      startDragX = mx;
+      startOffsetX = viewOffsetX;
+    }
+    lastClickTime = now;
+  });
+
+  window.addEventListener('mouseup', () => { isDragging = false; });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    
+    if (isDragging) {
+      viewOffsetX = startOffsetX + (mx - startDragX);
+      const minOffset = -(graphWidth * viewScaleX - graphWidth);
+      if (viewOffsetX > 0) viewOffsetX = 0;
+      if (viewOffsetX < minOffset) viewOffsetX = minOffset;
+    } else {
+      const match = parseMouseTarget(mx);
+      if (match) {
+        hoveredCandle = match.candle;
+        
+        if (anchor1 === null || anchor2 === null) {
+          ohlcPanel.innerHTML = `<span class="label">CANDLE:</span> O:<span class="val-neutral">${hoveredCandle.open.toFixed(1)}</span> H:<span class="val-up">${hoveredCandle.high.toFixed(1)}</span> L:<span class="val-down">${hoveredCandle.low.toFixed(1)}</span> C:<span class="val-neutral">${hoveredCandle.close.toFixed(1)}</span>`;
+        }
+        
+        let alertStatus = hoveredCandle.alert ? `[CROSSOVER ALIGNMENT: ${hoveredCandle.alert} SIGNAL]` : `[NO CURRENT ACTIVE TRIGGER]`;
+        let alertClass = hoveredCandle.alert === "BUY" ? "val-up" : (hoveredCandle.alert === "SELL" ? "val-down" : "label");
+        
+        mathPanel.innerHTML = `<span class="label">RSI:</span> <span class="val-neutral">${hoveredCandle.rsi.toFixed(1)}</span> | <span class="label">MACD:</span> <span class="val-up">${hoveredCandle.macd.toFixed(2)}</span> | Track: <span class="${alertClass}">${alertStatus}</span>`;
+      }
+    }
+  });
+
+  function calculateRangeMetrics() {
+    if (anchor1 === null || anchor2 === null) return;
+    let sIdx = Math.min(anchor1, anchor2);
+    let eIdx = Math.max(anchor1, anchor2);
+    
+    let subSet = rawData.slice(sIdx, eIdx + 1);
+    let highVal = -Infinity;
+    let lowVal = Infinity;
+    let totalBuyAlerts = 0;
+    let totalSellAlerts = 0;
+    
+    subSet.forEach(c => {
+      if (c.high > highVal) highVal = c.high;
+      if (c.low < lowVal) lowVal = c.low;
+      if (c.alert === "BUY") totalBuyAlerts++;
+      if (c.alert === "SELL") totalSellAlerts++;
+    });
+    
+    let deltaPct = ((rawData[eIdx].close - rawData[sIdx].open) / rawData[sIdx].open * 100).toFixed(2);
+    let rangeDirectionClass = parseFloat(deltaPct) >= 0 ? "val-up" : "val-down";
+    
+    ohlcPanel.innerHTML = `<span class="label">ZONE PRICE RANGE:</span> High: <span class="val-up">$${highVal.toFixed(1)}</span> | Low: <span class="val-down">$${lowVal.toFixed(1)}</span> | Net: <span class="${rangeDirectionClass}">${deltaPct}%</span>`;
+    mathPanel.innerHTML = `<span class="label">ZONE ALERTS:</span> Counted <span class="val-up">${totalBuyAlerts} BUY</span> crossovers and <span class="val-down">${totalSellAlerts} SELL</span> flags inside region.`;
+  }
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const factor = e.deltaY < 0 ? 1.15 : 0.85;
+    const prevScale = viewScaleX;
+    
+    viewScaleX = Math.max(1.0, Math.min(viewScaleX * factor, 25.0));
+    viewOffsetX = mx - (mx - viewOffsetX) * (viewScaleX / prevScale);
+
+    if (viewOffsetX > 0) viewOffsetX = 0;
+    const minOffset = -(graphWidth * viewScaleX - graphWidth);
+    if (viewOffsetX < minOffset) viewOffsetX = minOffset;
+  }, { passive: false });
+
+  // Start Frame Initialization Loop
+  requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
