@@ -1,0 +1,168 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floor Plan Path Animation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        #container {
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <canvas id="mapCanvas"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Configuration
+    const bgUrl = 'https://echarts.apache.org/examples/data/asset/geo/MacOdrum-LV5-floorplan-web.svg';
+    const lineColor = '#c46e54';
+    const lineWidth = 4;
+    const symbolColor = '#a84e32';
+    const speed = 2; // Pixel movement per frame
+
+    // Provided Coordinates
+    const coords = [
+        [110.6189462165178, 456.64349563895087],
+        [124.10988522879458, 450.8570048730469],
+        [123.9272226116071, 389.9520693708147],
+        [61.58708083147317, 386.87942320312504],
+        [61.58708083147317, 72.8954315876116],
+        [258.29514854771196, 72.8954315876116],
+        [260.75457021484374, 336.8559607533482],
+        [280.5277985253906, 410.2406672084263],
+        [275.948185765904, 528.0254369698661],
+        [111.06907909458701, 552.795792593471],
+        [118.87138231445309, 701.365737015904],
+        [221.36468155133926, 758.7870354617745],
+        [307.86195445452006, 742.164737297712],
+        [366.8489324762834, 560.9895157073103],
+        [492.8750778390066, 560.9895157073103],
+        [492.8750778390066, 827.9639780566406],
+        [294.9255269587053, 827.9639780566406],
+        [282.79803391043527, 868.2476088113839]
+    ];
+
+    // Create Path2D from user's custom SVG path string
+    const symbolPathString = 'M35.5 40.5c0-22.16 17.84-40 40-40s40 17.84 40 40c0 1.6939-.1042 3.3626-.3067 5H35.8067c-.2025-1.6374-.3067-3.3061-.3067-5zm90.9621-2.6663c-.62-1.4856-.9621-3.1182-.9621-4.8337 0-6.925 5.575-12.5 12.5-12.5s12.5 5.575 12.5 12.5a12.685 12.685 0 0 1-.1529 1.9691l.9537.5506-15.6454 27.0986-.1554-.0897V65.5h-28.7285c-7.318 9.1548-18.587 15-31.2715 15s-23.9535-5.8452-31.2715-15H15.5v-2.8059l-.0937.0437-8.8727-19.0274C2.912 41.5258.5 37.5549.5 33c0-6.925 5.575-12.5 12.5-12.5S25.5 26.075 25.5 33c0 .9035-.0949 1.784-.2753 2.6321L29.8262 45.5h92.2098z';
+    const symbolPath = new Path2D(symbolPathString);
+
+    // Load background image
+    const bgImage = new Image();
+    bgImage.src = bgUrl;
+    bgImage.onload = () => {
+        // Set canvas viewport size to match SVG floorplan aspect ratio naturally
+        canvas.width = bgImage.naturalWidth || 600;
+        canvas.height = bgImage.naturalHeight || 800;
+        
+        initAnimation();
+        animate();
+    };
+
+    let currentDistance = 0;
+    let totalLength = 0;
+    let segments = [];
+
+    function initAnimation() {
+        // Calculate cumulative lengths of polyline segments
+        for (let i = 0; i < coords.length - 1; i++) {
+            const p1 = coords[i];
+            const p2 = coords[i + 1];
+            const dx = p2[0] - p1[0];
+            const dy = p2[1] - p1[1];
+            const len = Math.sqrt(dx * dx + dy * dy);
+            segments.push({ p1, p2, len, startDist: totalLength });
+            totalLength += len;
+        }
+    }
+
+    function getPointAtDistance(dist) {
+        if (dist <= 0) return { x: coords[0][0], y: coords[0][1], angle: 0 };
+        if (dist >= totalLength) return { x: coords[coords.length-1][0], y: coords[coords.length-1][1], angle: 0 };
+
+        const seg = segments.find(s => dist >= s.startDist && dist <= s.startDist + s.len);
+        if (!seg) return { x: coords[0][0], y: coords[0][1], angle: 0 };
+
+        const t = (dist - seg.startDist) / seg.len;
+        const x = seg.p1[0] + (seg.p2[0] - seg.p1[0]) * t;
+        const y = seg.p1[1] + (seg.p2[1] - seg.p1[1]) * t;
+        const angle = Math.atan2(seg.p2[1] - seg.p1[1], seg.p2[0] - seg.p1[0]);
+
+        return { x, y, angle };
+    }
+
+    function drawStaticLayer() {
+        // 1. Draw SVG Background Floorplan
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+
+        // 2. Draw Polyline Trajectory
+        ctx.beginPath();
+        ctx.moveTo(coords[0][0], coords[0][1]);
+        for (let i = 1; i < coords.length; i++) {
+            ctx.lineTo(coords[i][0], coords[i][1]);
+        }
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        drawStaticLayer();
+
+        // Update animation tracking distance
+        currentDistance += speed;
+        if (currentDistance > totalLength) {
+            currentDistance = 0; // Seamless loop
+        }
+
+        const point = getPointAtDistance(currentDistance);
+
+        // Render Animated Custom SVG Path Symbol along the track
+        ctx.save();
+        ctx.translate(point.x, point.y);
+        // ctx.rotate(point.angle);
+         // Rotates the tracking path direction by an extra 90 degrees clockwise (Math.PI / 2)
+        ctx.rotate(point.angle + Math.PI / 2);       
+        // Scale and center your custom SVG path bounding box locally
+        ctx.scale(0.15, 0.15); 
+        ctx.translate(-75, -40); // Offset to approximate center-point alignment
+        
+        ctx.fillStyle = symbolColor;
+        ctx.fill(symbolPath);
+        ctx.restore();
+
+        requestAnimationFrame(animate);
+    }
+</script>
+
+</body>
+</html>

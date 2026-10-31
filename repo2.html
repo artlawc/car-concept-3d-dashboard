@@ -1,0 +1,934 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能粮仓大屏监控系统 - 旗舰精调版</title>
+    <style>
+        :root {
+            --bg-base: #020714;
+            --panel-bg: rgba(6, 18, 43, 0.45);
+            --border-glow: rgba(0, 162, 255, 0.4);
+            --neon-blue: #00f0ff;
+            --neon-green: #00ffaa;
+            --neon-amber: #ffaa00;
+            --neon-danger: #ff3b30;
+            --text-main: #c4d9fd;
+            --text-bright: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 50% 10%, rgba(9, 43, 92, 0.5) 0%, transparent 60%),
+                linear-gradient(rgba(0, 240, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Elegant Header Design with Slash Accents */
+        header {
+            background: linear-gradient(180deg, rgba(7, 26, 61, 0.8) 0%, rgba(3, 11, 28, 0.9) 100%);
+            border-bottom: 1px solid rgba(0, 162, 255, 0.3);
+            height: 65px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            position: relative;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 25%;
+            width: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        .header-left {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Rounded Buttons with Slash Angle Clips */
+        .nav-btn {
+            background: linear-gradient(135deg, rgba(0, 119, 204, 0.15) 0%, rgba(0, 68, 136, 0.25) 100%);
+            border: 1px solid rgba(0, 162, 255, 0.4);
+            color: #8bb2eb;
+            padding: 6px 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 6px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(5px);
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+            transition: 0.5s;
+        }
+
+        .nav-btn:hover::before {
+            left: 100%;
+        }
+
+        .nav-btn:hover {
+            color: #fff;
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, rgba(0, 170, 255, 0.4) 0%, rgba(0, 85, 170, 0.5) 100%);
+            border-color: #00ffff;
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 8px rgba(255, 255, 255, 0.2);
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        .header-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            background: linear-gradient(180deg, #ffffff 30%, #a4cdff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 8px rgba(0, 162, 255, 0.5));
+        }
+
+        .header-right {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            color: var(--neon-blue);
+            background: rgba(0, 240, 255, 0.05);
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 240, 255, 0.15);
+            box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.1);
+        }
+
+        /* Workspace Layout Grid Base */
+        .main-container {
+            display: flex;
+            flex: 1;
+            padding: 20px;
+            gap: 20px;
+            height: calc(100vh - 65px);
+        }
+
+        .panel-side {
+            width: 25%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-center {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Polished Box Component with Diagonal / Round Treatment */
+        .box {
+            background: var(--panel-bg);
+            border: 1px solid rgba(16, 58, 122, 0.6);
+            border-radius: 12px;
+            padding: 16px;
+            position: relative;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(0, 140, 255, 0.08);
+            transition: border-color 0.3s ease;
+        }
+
+        .box:hover {
+            border-color: rgba(0, 240, 255, 0.35);
+        }
+
+        /* Top Border Visual Accents with Gradient Bars */
+        .box::before {
+            content: '';
+            position: absolute;
+            top: -1px; left: 30px; right: 30px; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.4), transparent);
+        }
+        
+        .box-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-bright);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Diagonal Accent Graphic Element inside Header */
+        .box-title::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 16px;
+            background: linear-gradient(180deg, var(--neon-blue), #0055ff);
+            border-radius: 2px;
+            box-shadow: 0 0 8px var(--neon-blue);
+            transform: skewX(-15deg);
+        }
+
+        /* Conic Graph Storage Component Layouts */
+        .storage-circle-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .circle-outer-glow {
+            width: 105px;
+            height: 105px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 0 20px rgba(0, 240, 255, 0.15);
+            position: relative;
+        }
+
+        .circle-progress {
+            width: 92px;
+            height: 92px;
+            border-radius: 50%;
+            background: conic-gradient(var(--neon-blue) 0% 68%, rgba(13, 39, 77, 0.6) 68% 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.5s ease;
+        }
+
+        .circle-progress::before {
+            content: '';
+            position: absolute;
+            width: 78px;
+            height: 78px;
+            border-radius: 50%;
+            background: #040f24;
+            box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.2);
+        }
+
+        .circle-text {
+            position: relative;
+            text-align: center;
+            z-index: 2;
+        }
+
+        .circle-text h3 {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-bright);
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+        }
+
+        .circle-text p {
+            font-size: 10px;
+            color: #799ecb;
+            margin-top: 2px;
+        }
+
+        .storage-info-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .info-item {
+            background: rgba(11, 48, 102, 0.2);
+            border: 1px solid rgba(0, 162, 255, 0.1);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: #7fa4d4;
+        }
+
+        .info-item span {
+            color: var(--text-bright);
+            font-size: 13px;
+            font-weight: 600;
+            display: block;
+            margin-top: 3px;
+        }
+
+        /* Dashboard Temperature Elements UI styling with Glowing Terminals */
+        .sensor-group {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .sensor-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(11, 58, 117, 0.15);
+            border: 1px solid rgba(0, 136, 255, 0.1);
+            padding: 10px 14px;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sensor-row::after {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0; width: 3px;
+            background: var(--neon-blue);
+        }
+
+        .dial-mock {
+            width: 55px;
+            height: 28px;
+
+            border-top-left-radius: 30px;
+            border-top-right-radius: 30px;
+            border: 2px solid rgba(0, 240, 255, 0.2);
+            border-bottom: none;
+            position: relative;
+            box-shadow: inset 0 4px 10px rgba(0,240,255,0.05);
+        }
+
+        .dial-mock::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-danger));
+            bottom: 0;
+            left: 50%;
+            transform-origin: left center;
+            transform: rotate(-35deg);
+            box-shadow: 0 0 6px var(--neon-danger);
+        }
+
+        .thermo-mock {
+            width: 10px;
+            height: 40px;
+            background: rgba(13, 39, 77, 0.6);
+            border-radius: 20px;
+            position: relative;
+            border: 1px solid rgba(0, 162, 255, 0.2);
+            overflow: hidden;
+        }
+
+        .thermo-bar {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, var(--neon-amber), #ff5500);
+            box-shadow: 0 0 8px #ff5500;
+            border-radius: 20px;
+            transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Chart Canvas Configuration space setup */
+        .chart-container {
+            height: 110px;
+            width: 100%;
+        }
+
+        /* Main Workspace Content 3D Structural Mesh representation */
+        .canvas-3d-space {
+            flex: 1;
+            background: radial-gradient(circle at 50% 50%, #061c42 0%, #010817 100%);
+            border: 1px solid rgba(16, 58, 122, 0.5);
+            border-radius: 14px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        .grain-silo-graphic {
+            width: 340px;
+            height: 380px;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .silo-top {
+            width: 100%;
+            height: 70px;
+            border: 2px solid rgba(0, 240, 255, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            background: radial-gradient(ellipse at center, rgba(0, 240, 255, 0.1) 0%, transparent 70%);
+            transform: rotateX(25deg);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+        }
+
+        .silo-body {
+            width: 100%;
+            height: 290px;
+            border-left: 2px dashed rgba(0, 240, 255, 0.25);
+            border-right: 2px dashed rgba(0, 240, 255, 0.25);
+            background: linear-gradient(90deg, rgba(0,162,255,0.01) 0%, rgba(0,162,255,0.03) 50%, rgba(0,162,255,0.01) 100%);
+            position: absolute;
+            top: 45px;
+        }
+
+        .silo-matrix-core {
+            position: absolute;
+            top: 50px;
+            left: 5%;
+            width: 90%;
+            height: 240px;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .sensor-cable-line {
+            width: 1px;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(0, 240, 255, 0) 0%, rgba(0, 240, 255, 0.3) 20%, rgba(0, 240, 255, 0.3) 80%, rgba(0, 240, 255, 0) 100%);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .sensor-node-point {
+            width: 8px;
+            height: 8px;
+            background-color: var(--neon-green);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green);
+            animation: pulse-glow 2.5s infinite alternate ease-in-out;
+            position: relative;
+        }
+
+        .sensor-node-point::after {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border: 1px solid rgba(0, 255, 170, 0.4);
+            border-radius: 50%;
+            animation: ripple-out 2.5s infinite linear;
+        }
+
+        .sensor-node-point.danger {
+            background-color: var(--neon-danger);
+            box-shadow: 0 0 12px var(--neon-danger), 0 0 24px var(--neon-danger);
+            animation-duration: 1.2s;
+        }
+        
+        .sensor-node-point.danger::after {
+            border-color: rgba(255, 59, 48, 0.5);
+            animation-duration: 1.2s;
+        }
+
+        /* Camera Feed UI Polish */
+        .live-video-box {
+            width: 100%;
+            height: 125px;
+            background: #020612;
+            border: 1px solid rgba(0, 119, 204, 0.3);
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .video-overlay-text {
+            position: absolute;
+            top: 8px; left: 8px; z-index: 5;
+            font-size: 11px;
+            background: rgba(2, 6, 18, 0.75);
+            border: 1px solid rgba(0,240,255,0.2);
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .video-overlay-text::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--neon-danger);
+            border-radius: 50%;
+            animation: pulse-glow 0.8s infinite alternate;
+        }
+
+        .video-graphic-simulation {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(18, 140, 255, 0.05) 50%, rgba(0, 0, 0, 0.2) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 6px 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: rgba(0, 240, 255, 0.4);
+            text-shadow: 0 0 5px rgba(0,240,255,0.5);
+        }
+
+        /* Air System Engine Module Styling */
+        .ventilation-control-layout {
+            display: grid;
+            grid-template-columns: 75px 1fr;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .fan-spinner-container {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,240,255,0.1);
+        }
+
+        .fan-spinner-element {
+            width: 46px;
+            height: 46px;
+            border: 2px dashed var(--neon-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: rotational-spin 3s linear infinite;
+        }
+
+        .fan-blade-mock {
+            width: 32px;
+            height: 6px;
+            background: linear-gradient(90deg, var(--neon-blue), #0055ff);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .fan-blade-mock::before {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 32px;
+            background: linear-gradient(180deg, var(--neon-blue), #0055ff);
+            border-radius: 4px;
+            top: -13px;
+            left: 13px;
+        }
+
+        .ventilation-stats-rows {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        /* Power Management Grid blocks */
+        .metric-cards-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            text-align: center;
+        }
+
+        .metric-card-block {
+            background: rgba(11, 48, 102, 0.15);
+            border: 1px solid rgba(0, 162, 255, 0.12);
+            padding: 10px 6px;
+            border-radius: 10px;
+            box-shadow: inset 0 0 10px rgba(0,162,255,0.05);
+        }
+
+        .metric-card-block div {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--neon-blue);
+            margin-top: 4px;
+            text-shadow: 0 0 6px rgba(0,240,255,0.4);
+        }
+
+        .metric-card-block span {
+            font-size: 10px;
+            color: #7ba2cf;
+        }
+
+        /* CSS Keyframe Animations Initialization rules */
+        @keyframes rotational-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-glow {
+            from { opacity: 0.4; transform: scale(0.92); }
+            to { opacity: 1; transform: scale(1.08); }
+        }
+
+        @keyframes ripple-out {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <button class="nav-btn active">仓房信息</button>
+            <button class="nav-btn">智能仓储</button>
+            <button class="nav-btn">智能通风</button>
+            <button class="nav-btn">智能气调</button>
+        </div>
+        <div class="header-title">热电偶传感器监控系统</div>
+        <div class="header-right" id="liveClockDisplay">2026-10-29 02:01:45</div>
+    </header>
+
+    <div class="main-container">
+        <div class="panel-side">
+            <div class="box">
+                <div class="box-title">仓房总览</div>
+                <div class="storage-circle-container">
+                    <div class="circle-outer-glow">
+                        <div class="circle-progress" id="storageCapacityWidget">
+                            <div class="circle-text">
+
+                                <h3>68%</h3>
+                                <p>库存利用率</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="storage-info-grid">
+                        <div class="info-item">粮食货位 <span>01号平方仓</span></div>
+                        <div class="info-item">粮食数量 <span>10,000 吨</span></div>
+                        <div class="info-item">粮食种类 <span>小麦</span></div>
+                        <div class="info-item">当前水分 <span>12.5%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="box-title">粮情状态实时监测</div>
+                <div class="sensor-group" style="flex: 1; justify-content: space-around;">
+                    <div class="sensor-row">
+                        <div>
+                            <div style="font-size: 11px; color:#7fa4d4;">上层平均粮温</div>
+                            <div style="font-size: 18px; font-weight:700; color:#fff; margin-top:2px;">21.5 ℃</div>
+                        </div>
+                        <div class="dial-mock"></div>
+                        <div class="thermo-mock"><div class="thermo-bar" style="height: 65%;"></div></div>
+                        <div style="font-size: 10px; text-align:right; color:#7fa4d4; line-height: 1.5;">
+                            <div>最高: <span style="color:#fff;">24.0℃</span></div>
+                            <div>最低: <span style="color:#fff;">19.5℃</span></div>
+                        </div>
+                    </div>
+                    <div class="sensor-row">
+                        <div>
+                            <div style="font-size: 11px; color:#7fa4d4;">中层平均粮温</div>
+                            <div style="font-size: 18px; font-weight:700; color:#fff; margin-top:2px;">22.3 ℃</div>
+                        </div>
+                        <div class="dial-mock"></div>
+                        <div class="thermo-mock"><div class="thermo-bar" style="height: 70%;"></div></div>
+                        <div style="font-size: 10px; text-align:right; color:#7fa4d4; line-height: 1.5;">
+                            <div>最高: <span style="color:#fff;">25.1℃</span></div>
+                            <div>最低: <span style="color:#fff;">20.2℃</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="box-title">粮温统计预测线损</div>
+                <div style="font-size: 10px; margin-bottom: 8px; display:flex; gap:12px; justify-content: flex-end;">
+                    <span style="color:var(--neon-amber);">● 粮温</span>
+                    <span style="color:var(--neon-blue);">● 内温</span>
+                    <span style="color:var(--neon-danger);">● 外温</span>
+                </div>
+                <div class="chart-container">
+                    <svg viewBox="0 0 300 100" width="100%" height="100%">
+                        <line x1="25" y1="10" x2="295" y2="10" stroke="rgba(16, 58, 122, 0.3)" stroke-width="1" />
+                        <line x1="25" y1="40" x2="295" y2="40" stroke="rgba(16, 58, 122, 0.3)" stroke-width="1" />
+                        <line x1="25" y1="70" x2="295" y2="70" stroke="rgba(16, 58, 122, 0.3)" stroke-width="1" />
+                        <line x1="25" y1="90" x2="295" y2="90" stroke="rgba(0, 162, 255, 0.3)" stroke-width="1" />
+                        <path d="M25,75 Q55,71 85,63 T145,66 T205,58 T265,60 T295,55" fill="none" stroke="var(--neon-amber)" stroke-width="2"/>
+                        <path d="M25,50 Q55,53 85,46 T145,50 T205,42 T265,47 T295,39" fill="none" stroke="var(--neon-blue)" stroke-width="2"/>
+                        <path d="M25,30 Q55,34 85,38 T145,30 T205,23 T265,33 T295,18" fill="none" stroke="var(--neon-danger)" stroke-width="1.5" stroke-dasharray="3,3"/>
+                        <text x="0" y="13" fill="#57759f" font-size="8">30℃</text>
+                        <text x="0" y="43" fill="#57759f" font-size="8">20℃</text>
+                        <text x="0" y="73" fill="#57759f" font-size="8">10℃</text>
+                        <text x="25" y="99" fill="#57759f" font-size="7">06-25</text>
+                        <text x="115" y="99" fill="#57759f" font-size="7">07-01</text>
+                        <text x="205" y="99" fill="#57759f" font-size="7">07-10</text>
+                        <text x="265" y="99" fill="#57759f" font-size="7">07-19</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-center">
+            <div class="canvas-3d-space">
+                <div class="grain-silo-graphic">
+                    <div class="silo-top"></div>
+                    <div class="silo-body">
+                        <div class="silo-matrix-core">
+                            <div class="sensor-cable-line">
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                            </div>
+                            <div class="sensor-cable-line">
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point danger"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                            </div>
+                            <div class="sensor-cable-line">
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point danger"></div>
+                                <div class="sensor-node-point"></div>
+                            </div>
+                            <div class="sensor-cable-line">
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                                <div class="sensor-node-point"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="position: absolute; bottom: 25px; text-align: center; width: 100%;">
+                    <div style="background: rgba(6, 26, 61, 0.85); padding: 8px 24px; border-radius: 30px; display: inline-block; border: 1px solid rgba(0, 240, 255, 0.4); color:#ffffff; font-size:14px; font-weight:600; letter-spacing:1px; box-shadow: 0 4px 15px rgba(0,0,0,0.6), 0 0 10px rgba(0,240,255,0.2); backdrop-filter:blur(5px);">
+                        多层深埋立体密闭式热电偶测温网点分布
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-side">
+            <div class="box">
+                <div class="box-title">仓内现场实况监控</div>
+                <div class="live-video-box">
+                    <div class="video-overlay-text">通道01-仓房内部东北角 [实时核对]</div>
+                    <div class="video-graphic-simulation">
+                        <span>● LIVE FEED CAMERA STREAM ACTIVE</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="box-title">通风系统运行状态</div>
+                <div class="ventilation-control-layout">
+                    <div class="fan-spinner-container">
+                        <div class="fan-spinner-element">
+                            <div class="fan-blade-mock"></div>
+                        </div>
+                    </div>
+                    <div class="ventilation-stats-rows">
+                        <div class="info-item">通风模式 <span>自动通风</span></div>
+                        <div class="info-item">通风方式 <span>轴流风机</span></div>
+                        <div class="info-item">开启时间 <span>10-29 00:15</span></div>
+                        <div class="info-item">累计时长 <span>1时16分</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div class="box-title">能耗及设备控制管理</div>
+                    <div class="metric-cards-row">
+                        <div class="metric-card-block">
+                            <span>总用电量</span>
+                            <div id="metricTotalPower">10027</div>
+                            <span style="font-size:9px; color:#57759f;">kWh</span>
+                        </div>
+                        <div class="metric-card-block">
+                            <span>运行设备</span>
+                            <div>2</div>
+                            <span style="font-size:9px; color:#57759f;">台</span>
+                        </div>
+                        <div class="metric-card-block">
+                            <span>当前负荷</span>
+                            <div id="metricCurrentLoad">45.2</div>
+                            <span style="font-size:9px; color:#57759f;">kW</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="height: 105px; width: 100%; margin-top: 15px; display: flex; flex-direction: column; justify-content: flex-end;">
+                    <div style="font-size:11px; margin-bottom: 6px; color: #7fa4d4; display:flex; justify-content:space-between;">
+                        <span>实时瞬时功率负载波形图 (kW)</span>
+                        <span id="realtimeLoadVal" style="color:var(--neon-amber); font-weight:bold;">45.2 kW</span>
+                    </div>
+                    <div style="flex: 1; position: relative;">
+                        <svg id="realtimePowerGraph" width="100%" height="100%" style="overflow: visible;">
+                            <defs>
+                                <linearGradient id="energyAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--neon-amber)" stop-opacity="0.35"/>
+                                    <stop offset="100%" stop-color="var(--bg-base)" stop-opacity="0.0"/>
+                                </linearGradient>
+                            </defs>
+                            <g id="graphGridLines" stroke="rgba(16, 58, 122, 0.2)" stroke-width="1"></g>
+                            <path id="energyPathArea" d="" fill="url(#energyAreaGradient)"/>
+                            <path id="energyPathLine" d="" fill="none" stroke="var(--neon-amber)" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // System clock logic execution
+        function startSystemClock() {
+            const clockNode = document.getElementById('liveClockDisplay');
+            setInterval(() => {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const date = String(now.getDate()).padStart(2, '0');
+                const hrs = String(now.getHours()).padStart(2, '0');
+                const mins = String(now.getMinutes()).padStart(2, '0');
+                const secs = String(now.getSeconds()).padStart(2, '0');
+                clockNode.textContent = `${year}-${month}-${date} ${hrs}:${mins}:${secs}`;
+            }, 1000);
+        }
+
+        // Real-time streaming generator engine configuration for Energy Chart
+        function initRealtimeEnergyGraph() {
+            const svg = document.getElementById('realtimePowerGraph');
+            const gridGroup = document.getElementById('graphGridLines');
+            const linePath = document.getElementById('energyPathLine');
+            const areaPath = document.getElementById('energyPathArea');
+            const loadText = document.getElementById('realtimeLoadVal');
+            const blockLoadText = document.getElementById('metricCurrentLoad');
+            const totalPowerText = document.getElementById('metricTotalPower');
+
+            let totalPower = 10027.4;
+            const maxPoints = 25;
+            let dataPoints = Array.from({length: maxPoints}, () => 40 + Math.random() * 10);
+            
+            const width = svg.clientWidth || 290;
+            const height = svg.clientHeight || 75;
+
+            // Draw horizontal static reference ticks
+            gridGroup.innerHTML = `
+                <line x1="0" y1="${height * 0.25}" x2="${width}" y2="${height * 0.25}" />
+                <line x1="0" y1="${height * 0.5}" x2="${width}" y2="${height * 0.5}" />
+                <line x1="0" y1="${height * 0.75}" x2="${width}" y2="${height * 0.75}" />
+            `;
+
+            function updateChartFrame() {
+                // Generate a rolling wave with occasional synthetic spikes
+                const lastVal = dataPoints[dataPoints.length - 1];
+                const shift = (Math.random() - 0.5) * 6;
+                let nextVal = lastVal + shift;
+                if(nextVal < 20) nextVal = 20;
+                if(nextVal > 85) nextVal = 85;
+                
+                dataPoints.push(nextVal);
+                dataPoints.shift();
+
+                // Live accumulator value updating
+                totalPower += (nextVal / 3600);
+                totalPowerText.textContent = Math.floor(totalPower);
+
+                // Update text fields
+                const displayVal = nextVal.toFixed(1);
+                loadText.textContent = `${displayVal} kW`;
+                blockLoadText.textContent = displayVal;
+
+                // Scale data points to SVG Coordinate Grid Space boundaries
+                const stepX = width / (maxPoints - 1);
+                let pathString = "";
+                
+                dataPoints.forEach((val, i) => {
+                    // Invert y axis for graphics space
+                    const x = i * stepX;
+                    const y = height - ((val / 100) * height);
+                    if (i === 0) {
+                        pathString += `M ${x} ${y}`;
+                    } else {
+                        pathString += ` L ${x} ${y}`;
+                    }
+                });
+
+                linePath.setAttribute('d', pathString);
+                
+                // Formulate closed fill contour loop mapping for the area accent
+                const closedAreaString = `${pathString} L ${width} ${height} L 0 ${height} Z`;
+                areaPath.setAttribute('d', closedAreaString);
+            }
+
+            // Sync rendering processing speed loops
+            setInterval(updateChartFrame, 800);
+            window.addEventListener('resize', () => {
+                setTimeout(() => {
+                    const w = svg.clientWidth;
+                    const h = svg.clientHeight;
+                    gridGroup.innerHTML = `
+                        <line x1="0" y1="${h * 0.25}" x2="${w}" y2="${h * 0.25}" />
+                        <line x1="0" y1="${h * 0.5}" x2="${w}" y2="${h * 0.5}" />
+                        <line x1="0" y1="${h * 0.75}" x2="${w}" y2="${h * 0.75}" />
+                    `;
+                }, 200);
+            });
+        }
+
+        window.onload = function() {
+            startSystemClock();
+            initRealtimeEnergyGraph();
+        };
+    </script>
+</body>
+</html>

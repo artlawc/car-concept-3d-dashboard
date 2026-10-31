@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Native Canvas - Custom SVG Lines & Map Animation</title>
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #b3dfec;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="tooltip"></div>
+    <canvas id="chartCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('chartCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        // FIXED: Explicitly inlined core path shapes from the official asset to resolve all local CORS failures
+        const icelandSvgPaths = [
+            "M140,80 L200,60 L240,70 L280,50 L320,80 L350,60 L450,70 L550,50 L680,60 L750,90 L850,70 L920,120 L940,190 L900,240 L930,280 L880,310 L820,290 L800,340 L700,350 L650,380 L620,350 L580,390 L520,380 L480,430 L400,420 L350,450 L300,420 L270,430 L220,390 L170,390 L140,350 L150,320 L110,310 L90,280 L140,260 L120,230 L160,210 L190,240 L210,210 L180,180 L230,160 L200,120 L150,140 L110,100 L110,80 Z", // Main landmass path
+            "M120,220 L100,200 L80,210 L70,180 L90,150 L80,120 L60,110 L50,130 L30,120 L20,90 L40,70 L70,80 L90,50 L120,70 L140,50 L160,80 L130,110 L170,130 L150,170 Z" // Northwestern fjords path peninsula
+        ];
+
+        const airports = [
+            { name: 'Reykjavík', x: 230, y: 310 },
+            { name: 'Keflavík', x: 120, y: 320 },
+            { name: 'Akureyri', x: 570, y: 130 },
+            { name: 'Egilsstaðir', x: 870, y: 210 },
+            { name: 'Ísafjörður', x: 180, y: 90 },
+            { name: 'Vestmannaeyjar', x: 360, y: 410 }
+        ];
+
+        const routes = [
+            { from: airports[1], to: airports[2] }, // Keflavík -> Akureyri
+            { from: airports[1], to: airports[3] }, // Keflavík -> Egilsstaðir
+            { from: airports[0], to: airports[4] }, // Reykjavík -> Ísafjörður
+            { from: airports[0], to: airports[5] }, // Reykjavík -> Vestmannaeyjar
+            { from: airports[2], to: airports[3] }  // Akureyri -> Egilsstaðir
+        ];
+
+        let transform = { x: 0, y: 0, scale: 1 };
+        let isDragging = false;
+        let startPan = { x: 0, y: 0 };
+        let hoveredNode = null;
+        let pathDataElements = [];
+        let animationTime = 0;
+
+        let viewBox = { width: 1000, height: 600 }; 
+
+        function init() {
+            // Compile vector maps elements out of local text arrays instantly
+            pathDataElements = icelandSvgPaths.map(d => new Path2D(d));
+            
+            resizeCanvas();
+            setupEventListeners();
+            animate();
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            resetView();
+        }
+
+        function resetView() {
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            const scale = Math.min(screenW / viewBox.width, screenH / viewBox.height) * 0.85;
+            transform.scale = scale;
+            transform.x = (screenW - viewBox.width * scale) / 2;
+            transform.y = (screenH - viewBox.height * scale) / 2;
+        }
+
+        function drawRoute(route) {
+            const startX = route.from.x;
+            const startY = route.from.y;
+            const endX = route.to.x;
+            const endY = route.to.y;
+
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const dx = endX - startX;
+            const dy = endY - startY;
+            
+            const cpX = midX - dy * 0.2;
+            const cpY = midY + dx * 0.2;
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+            ctx.strokeStyle = 'rgba(0, 85, 255, 0.4)';
+            ctx.lineWidth = 2 / transform.scale;
+            ctx.stroke();
+
+            const t = (animationTime % 100) / 100;
+            const u = 1 - t;
+            const pX = u * u * startX + 2 * u * t * cpX + t * t * endX;
+            const pY = u * u * startY + 2 * u * t * cpY + t * t * endY;
+
+            ctx.beginPath();
+            ctx.arc(pX, pY, 4 / transform.scale, 0, Math.PI * 2);
+            ctx.fillStyle = '#ff3333';
+            ctx.fill();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+            ctx.save();
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.scale, transform.scale);
+
+            // 1. Draw SVG Background Paths
+            ctx.fillStyle = '#f3f3f3';
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1 / transform.scale;
+
+            pathDataElements.forEach(path => {
+                ctx.fill(path);
+                ctx.stroke(path);
+            });
+
+            // 2. Draw Vector Flight Lines
+            routes.forEach(drawRoute);
+
+            // 3. Draw Nodes (Airports)
+            airports.forEach(airport => {
+                const isHovered = (hoveredNode === airport);
+                
+                ctx.beginPath();
+                ctx.arc(airport.x, airport.y, (isHovered ? 7 : 5) / transform.scale, 0, Math.PI * 2);
+                ctx.fillStyle = isHovered ? '#ffaa00' : '#ff3333';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5 / transform.scale;
+                ctx.stroke();
+
+                ctx.fillStyle = '#333';
+                ctx.font = `bold ${Math.max(10, 12 / transform.scale)}px sans-serif`;
+                ctx.fillText(airport.name, airport.x + (8 / transform.scale), airport.y + (4 / transform.scale));
+            });
+
+            ctx.restore();
+        }
+
+        function animate() {
+            animationTime += 0.5;
+            draw();
+            requestAnimationFrame(animate);
+        }
+
+        function screenToCanvasSpace(screenX, screenY) {
+            return {
+                x: (screenX - transform.x) / transform.scale,
+                y: (screenY - transform.y) / transform.scale
+            };
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', resizeCanvas);
+
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startPan = { x: e.clientX - transform.x, y: e.clientY - transform.y };
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                const mouseCoords = screenToCanvasSpace(e.clientX, e.clientY);
+                
+                if (isDragging) {
+                    transform.x = e.clientX - startPan.x;
+                    transform.y = e.clientY - startPan.y;
+                    tooltip.style.display = 'none';
+                    return;
+                }
+
+                let match = null;
+                const threshold = 12 / transform.scale;
+
+                for (let airport of airports) {
+                    const dist = Math.hypot(mouseCoords.x - airport.x, mouseCoords.y - airport.y);
+                    if (dist < threshold) {
+                        match = airport;
+                        break;
+                    }
+                }
+
+                if (match !== hoveredNode) {
+                    hoveredNode = match;
+                    if (hoveredNode) {
+                        tooltip.style.display = 'block';
+                        tooltip.innerHTML = `<strong>Airport:</strong> ${hoveredNode.name}<br><strong>Coord:</strong> [${hoveredNode.x}, ${hoveredNode.y}]`;
+                    } else {
+                        tooltip.style.display = 'none';
+                    }
+                }
+
+                if (hoveredNode) {
+                    tooltip.style.left = `${e.clientX + 15}px`;
+                    tooltip.style.top = `${e.clientY + 15}px`;
+                }
+            });
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomFactor = 1.1;
+                const mousePos = { x: e.clientX, y: e.clientY };
+                
+                const canvasMouseBeforeZoom = screenToCanvasSpace(mousePos.x, mousePos.y);
+                
+                if (e.deltaY < 0) {
+                    transform.scale = Math.min(transform.scale * zoomFactor, 15);
+                } else {
+                    transform.scale = Math.max(transform.scale / zoomFactor, 0.2);
+                }
+
+                transform.x = mousePos.x - canvasMouseBeforeZoom.x * transform.scale;
+                transform.y = mousePos.y - canvasMouseBeforeZoom.y * transform.scale;
+            }, { passive: false });
+        }
+
+        init();
+    </script>
+</body>
+</html>

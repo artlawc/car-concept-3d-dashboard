@@ -1,0 +1,925 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NET_MONITOR // SILO_CORE_v7.72</title>
+    <style>
+        :root {
+            --bg-base: #03070d;
+            --panel-bg: rgba(6, 11, 22, 0.85);
+            --cyber-yellow: #fce300;
+            --text-muted: #4e6178;
+            --text-main: #738ca6;
+            --text-bright: #ffffff;
+            --glitch-red: #ff0055;
+            --glitch-blue: #00ffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 75% 20%, rgba(252, 227, 0, 0.03) 0%, transparent 50%),
+                linear-gradient(rgba(78, 97, 120, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(78, 97, 120, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px, 30px 30px;
+            color: var(--text-main);
+            font-family: 'Consolas', 'Courier New', monospace, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            letter-spacing: 0.5px;
+        }
+
+        body::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 9999;
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+        }
+
+        header {
+            background: #000000;
+            border-bottom: 2px solid var(--text-muted);
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 25px;
+            position: relative;
+            clip-path: polygon(0 0, 100% 0, 100% 75%, 95% 100%, 0 100%);
+        }
+
+        .header-left {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: 1px solid var(--text-muted);
+            color: var(--text-main);
+            padding: 5px 18px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transform: skewX(-15deg);
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            border-color: var(--cyber-yellow);
+            color: var(--cyber-yellow);
+            background: rgba(252, 227, 0, 0.02);
+        }
+
+        .nav-btn.active {
+            background: var(--cyber-yellow);
+            border-color: var(--cyber-yellow);
+            color: #000000;
+            box-shadow: 0 0 10px rgba(252, 227, 0, 0.4);
+        }
+
+        .header-title {
+            position: absolute;
+            left: 42%;
+            color: var(--text-bright);
+            font-size: 18px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .header-title span {
+            color: var(--cyber-yellow);
+            animation: pulse-telemetry 2s infinite;
+        }
+
+        .header-right {
+            font-size: 12px;
+            color: var(--text-bright);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .barcode-decorator {
+            font-size: 16px;
+            letter-spacing: -1px;
+            color: var(--text-muted);
+            font-family: 'Arial Auto', monospace;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            padding: 15px;
+            gap: 15px;
+            height: calc(100vh - 60px);
+        }
+
+        .panel-side {
+            width: 26%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel-center {
+            width: 48%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .box {
+            background: var(--panel-bg);
+            border: 1px solid rgba(78, 97, 120, 0.25);
+            padding: 14px;
+            position: relative;
+        }
+
+        .box::before {
+            content: '';
+            position: absolute;
+            top: -1px; left: -1px; width: 10px; height: 10px;
+            border-top: 2px solid var(--text-muted);
+            border-left: 2px solid var(--text-muted);
+        }
+
+        .box::after {
+            content: '';
+            position: absolute;
+            bottom: -1px; right: -1px; width: 15px; height: 4px;
+            background: var(--text-muted);
+        }
+
+        .box-skew-tag {
+            position: absolute;
+            top: -1px;
+            right: 20px;
+            height: 3px;
+            width: 40px;
+            background: var(--text-muted);
+            transform: skewX(-45deg);
+        }
+        
+        .box-title {
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--text-bright);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(78, 97, 120, 0.15);
+            padding-bottom: 4px;
+        }
+
+        .box-title .telemetry-code {
+            color: var(--text-muted);
+            font-size: 9px;
+        }
+
+        .storage-circle-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .water-tank-wrapper {
+            width: 96px;
+            height: 96px;
+            border: 1px solid var(--text-muted);
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.8);
+        }
+
+        .water-tank-wrapper.active-focus {
+            border-color: var(--cyber-yellow);
+        }
+
+        .water-liquid-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 68%;
+            background: rgba(78, 97, 120, 0.2);
+            transition: height 1s ease;
+        }
+
+        .water-tank-wrapper.active-focus .water-liquid-fill {
+            background: rgba(252, 227, 0, 0.12);
+        }
+
+        .wave-svg-node {
+            position: absolute;
+            top: -12px;
+            left: 0;
+            width: 200%;
+            height: 15px;
+            fill: rgba(78, 97, 120, 0.3);
+            transform: translateX(0);
+            animation: wave-slide-loop 4s linear infinite;
+        }
+
+        .wave-svg-node.back-wave {
+            top: -15px;
+            fill: rgba(252, 227, 0, 0.25);
+            animation: wave-slide-loop 2.5s linear infinite reverse;
+        }
+
+        .circle-text {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+        }
+
+        .circle-text h3 {
+            font-size: 22px;
+            font-weight: 900;
+            color: var(--text-bright);
+        }
+
+        .water-tank-wrapper.active-focus .circle-text h3 {
+            color: var(--cyber-yellow);
+            text-shadow: 0 0 8px rgba(252, 227, 0, 0.5);
+        }
+
+        .circle-text p {
+            font-size: 8px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .storage-info-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .info-item {
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 2px solid var(--text-muted);
+            padding: 6px 10px;
+            font-size: 10px;
+            color: var(--text-main);
+        }
+
+        .info-item span {
+            color: var(--text-bright);
+            font-size: 11px;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .sensor-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .sensor-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px dashed rgba(78, 97, 120, 0.15);
+            padding: 8px 12px;
+        }
+
+        .dial-mock {
+            width: 45px;
+            height: 22px;
+            border-top-left-radius: 25px;
+            border-top-right-radius: 25px;
+            border: 1px solid var(--text-muted);
+            border-bottom: none;
+            position: relative;
+        }
+
+        .dial-mock::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 1px;
+            background: var(--text-main);
+            bottom: 0; left: 50%;
+            transform-origin: left center;
+            transform: rotate(-25deg);
+        }
+
+        .thermo-mock {
+            width: 6px;
+            height: 35px;
+            background: #0a1017;
+            position: relative;
+        }
+
+        .thermo-bar {
+            position: absolute;
+            bottom: 0; width: 100%;
+            background: var(--text-main);
+        }
+
+        .chart-container {
+            height: 110px;
+            width: 100%;
+        }
+
+        .canvas-3d-space {
+            flex: 1;
+            background: #010408;
+            border: 1px solid rgba(78, 97, 120, 0.2);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .canvas-3d-space::before {
+            content: '+';
+            position: absolute;
+            font-size: 18px;
+            color: rgba(78, 97, 120, 0.3);
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .grid-line-overlay {
+            position: absolute;
+            width: 80%; height: 80%;
+            border: 1px solid rgba(78, 97, 120, 0.05);
+            background-image: linear-gradient(rgba(78, 97, 120, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(78, 97, 120, 0.02) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .grain-silo-graphic {
+            width: 300px;
+            height: 340px;
+            position: relative;
+        }
+
+        .silo-body-wireframe {
+            width: 100%; height: 100%;
+            border-left: 1px solid rgba(78, 97, 120, 0.2);
+            border-right: 1px solid rgba(78, 97, 120, 0.2);
+            position: relative;
+        }
+
+        .matrix-core-cables {
+            position: absolute;
+            width: 100%; height: 100%;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .cable-wire {
+            width: 1px; height: 85%;
+            background: rgba(78, 97, 120, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .node-dot {
+            width: 4px; height: 4px;
+            background: var(--text-muted);
+            border-radius: 50%;
+        }
+
+        .node-dot.alert-target {
+            background: var(--cyber-yellow);
+            box-shadow: 0 0 8px var(--cyber-yellow);
+            width: 6px; height: 6px;
+            animation: pulse-telemetry 1s infinite alternate;
+        }
+
+        .live-video-box {
+            width: 100%;
+            height: 110px;
+            background: #000;
+            border: 1px solid rgba(78, 97, 120, 0.2);
+            position: relative;
+        }
+
+        .video-overlay-text {
+            position: absolute;
+            top: 4px; left: 6px;
+            font-size: 8px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .video-graphic-simulation {
+            width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, #02050a, #02050a 2px, #050b14 2px, #050b14 4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+
+        .ventilation-control-layout {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .fan-spinner-element {
+            width: 45px;
+            height: 45px;
+            border: 1px dashed var(--text-muted);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: rotational-spin 5s linear infinite;
+        }
+
+        .fan-blade-mock {
+            width: 30px;
+            height: 2px;
+            background: var(--text-muted);
+        }
+
+        .metric-cards-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            text-align: center;
+        }
+
+        .metric-card-block {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(78, 97, 120, 0.15);
+            padding: 8px 4px;
+        }
+
+        .metric-card-block div {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--text-bright);
+            margin-top: 2px;
+        }
+
+        .metric-card-block span {
+            font-size: 8px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        #realtimePowerGraph {
+            overflow: visible;
+        }
+
+        .neon-signal-path {
+            stroke: var(--cyber-yellow);
+            stroke-width: 2;
+            fill: none;
+            filter: drop-shadow(0 0 3px rgba(252, 227, 0, 0.6));
+        }
+
+        .neon-signal-area {
+            fill: url(#cyberAreaGradient);
+        }
+
+        /* NEW ARTWORK: Cyber Glitch Notification Center Overlay */
+        .glitch-overlay-terminal {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 260px;
+        }
+
+        .glitch-card {
+            background: rgba(255, 0, 85, 0.12);
+            border-left: 3px solid var(--glitch-red);
+            border-right: 1px solid rgba(255, 0, 85, 0.3);
+            border-top: 1px solid rgba(255, 0, 85, 0.2);
+            border-bottom: 1px solid rgba(255, 0, 85, 0.2);
+            padding: 6px 10px;
+            font-size: 10px;
+            color: #ff99bb;
+            position: relative;
+            animation: card-glitch-jitter 0.3s steps(2) infinite alternate;
+        }
+
+        .glitch-card::before {
+            content: attr(data-text);
+            position: absolute;
+            top: 0; left: 2px;
+            text-shadow: -1px 0 var(--glitch-blue);
+            background: transparent;
+            overflow: hidden;
+            clip: rect(0, 900px, 0, 0); 
+            animation: noise-anim-2 3s infinite linear alternate-reverse;
+        }
+
+        /* Dynamic Selector Legend */
+        .multi-channel-legend {
+            font-size: 9px;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .legend-node {
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .legend-node.active {
+            opacity: 1;
+            font-weight: bold;
+        }
+
+        @keyframes card-glitch-jitter {
+            0% { transform: translate(0, 0) skewX(0deg); }
+            50% { transform: translate(-1px, 1px) skewX(1deg); }
+            100% { transform: translate(1px, -1px) skewX(-1deg); }
+        }
+
+        @keyframes noise-anim-2 {
+            0% { clip: rect(12px, 9999px, 20px, 0); }
+            20% { clip: rect(45px, 9999px, 56px, 0); }
+            40% { clip: rect(5px, 9999px, 15px, 0); }
+            60% { clip: rect(80px, 9999px, 95px, 0); }
+            80% { clip: rect(32px, 9999px, 40px, 0); }
+            100% { clip: rect(62px, 9999px, 78px, 0); }
+        }
+
+        @keyframes rotational-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-telemetry {
+            0% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes wave-slide-loop {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <button class="nav-btn active">INFO_01</button>
+            <button class="nav-btn">SYS_02</button>
+            <button class="nav-btn">AIR_03</button>
+            <button class="nav-btn">GAS_04</button>
+        </div>
+        <div class="header-title">SILO_NETWORK_MONITOR // <span>ONLINE</span></div>
+        <div class="header-right">
+            <!-- <div style="font-size: 8px; color: var(--cyber-yellow); margin-right: 5px;">[TAP 'K' FOR INTRUSION ALERT MOCK]</div> -->
+            <div class="barcode-decorator">||||| | || ||||| | |||</div>
+            <div id="liveClockDisplay">2026-10-29 02:30:00</div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="panel-side">
+            <div class="box">
+                <div class="box-skew-tag"></div>
+                <div class="box-title">OVERVIEW <span class="telemetry-code">LOC_P01</span></div>
+                <div class="storage-circle-container">
+                    <div class="water-tank-wrapper active-focus" id="storageCapacityWidget">
+                        <div class="water-liquid-fill">
+                            <svg class="wave-svg-node back-wave" viewBox="0 0 100 20" preserveAspectRatio="none">
+                                <path d="M0,10 Q25,5 50,10 T100,10 L100,20 L0,20 Z"/>
+                            </svg>
+                            <svg class="wave-svg-node" viewBox="0 0 100 20" preserveAspectRatio="none">
+                                <path d="M0,10 Q25,15 50,10 T100,10 L100,20 L0,20 Z"/>
+                            </svg>
+                        </div>
+                        <div class="circle-text">
+                            <h3>68%</h3>
+                            <p>VOL_UTIL</p>
+                        </div>
+                    </div>
+                    <div class="storage-info-grid">
+                        <div class="info-item">BAY_ID <span>01_SQ_SILO</span></div>
+                        <div class="info-item">NET_QTY <span>10,000 T</span></div>
+                        <div class="info-item">GRAIN_TYPE <span>WHEAT_04</span></div>
+                        <div class="info-item">MOIST <span>12.5%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="box-skew-tag"></div>
+                <div class="box-title">TELEMETRY_REALTIME <span class="telemetry-code">SENS_ARRAY</span></div>
+                <div class="sensor-group" style="flex: 1; justify-content: space-around;">
+                    <div class="sensor-row">
+                        <div>
+                            <div style="font-size: 9px; color: var(--text-muted);">TOP_AVG_TEMP</div>
+                            <div style="font-size: 14px; font-weight: bold; color: var(--text-bright); margin-top: 2px;">21.5 ℃</div>
+                        </div>
+                        <div class="dial-mock"></div>
+                        <div class="thermo-mock"><div class="thermo-bar" style="height: 65%;"></div></div>
+                    </div>
+                    <div class="sensor-row">
+                        <div>
+                            <div style="font-size: 9px; color: var(--text-muted);">MID_AVG_TEMP</div>
+                            <div style="font-size: 14px; font-weight: bold; color: var(--text-bright); margin-top: 2px;">22.3 ℃</div>
+                        </div>
+                        <div class="dial-mock"></div>
+                        <div class="thermo-mock"><div class="thermo-bar" style="height: 70%;"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="box-skew-tag"></div>
+                <div class="box-title">HISTORICAL_LOGS <span class="telemetry-code">PREDICT_v0</span></div>
+                <div class="multi-channel-legend">
+                    <span class="legend-node active" id="ch1" onclick="switchChannel(0)" style="color:var(--glitch-blue)">● CH_01</span>
+                    <span class="legend-node" id="ch2" onclick="switchChannel(1)" style="color:var(--cyber-yellow)">● CH_02</span>
+                    <span class="legend-node" id="ch3" onclick="switchChannel(2)" style="color:var(--glitch-red)">● CH_03</span>
+                </div>
+                <div class="chart-container">
+                    <svg viewBox="0 0 300 100" width="100%" height="100%">
+                        <line x1="20" y1="15" x2="290" y2="15" stroke="rgba(78, 97, 120, 0.1)" stroke-width="1" />
+                        <line x1="20" y1="45" x2="290" y2="45" stroke="rgba(78, 97, 120, 0.1)" stroke-width="1" />
+                        <line x1="20" y1="75" x2="290" y2="75" stroke="rgba(78, 97, 120, 0.1)" stroke-width="1" />
+                        <g id="historicalDynamicPaths"></g>
+                        <text x="0" y="18" fill="var(--text-muted)" font-size="7">30C</text>
+                        <text x="0" y="48" fill="var(--text-muted)" font-size="7">20C</text>
+                        <text x="0" y="78" fill="var(--text-muted)" font-size="7">10C</text>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="glitch-overlay-terminal" id="alertTerminalLayer">
+            <div class="glitch-card" data-text="CRITICAL: THERMO_CABLE_02 OVERHEAT">CRITICAL: THERMO_CABLE_02 OVERHEAT</div>
+        </div>
+        
+        <div class="panel-center">
+            <div class="canvas-3d-space">
+                <div class="grid-line-overlay"></div>
+                <div class="grain-silo-graphic">
+                    <div class="silo-body-wireframe">
+                        <div class="matrix-core-cables">
+                            <div class="cable-wire"><div class="node-dot"></div><div class="node-dot"></div><div class="node-dot"></div></div>
+                            <div class="cable-wire"><div class="node-dot"></div><div class="node-dot alert-target"></div><div class="node-dot"></div></div>
+                            <div class="cable-wire"><div class="node-dot"></div><div class="node-dot"></div><div class="node-dot alert-target"></div></div>
+                            <div class="cable-wire"><div class="node-dot"></div><div class="node-dot"></div><div class="node-dot"></div></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="position: absolute; bottom: 15px; font-size: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px;">
+                    3D_MATRIX_THERMOCOUPLE_MESH // ACTIVE_MAPPING
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-side">
+            <div class="box">
+                <div class="box-skew-tag"></div>
+                <div class="box-title">FEED_STILL <span class="telemetry-code">CAM_01_NE</span></div>
+                <div class="live-video-box">
+                    <div class="video-overlay-text">STILL_REC // BUFFER_OK</div>
+                    <div class="video-graphic-simulation">
+                        <span>[ MATRIX_FEED_MOCK ]</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="box-skew-tag"></div>
+                <div class="box-title">AIR_CIRCULATION_ENGINES <span class="telemetry-code">VENT_SYS</span></div>
+                <div class="ventilation-control-layout">
+                    <div class="fan-spinner-element"><div class="fan-blade-mock"></div></div>
+                    <div style="display: flex; gap: 8px; flex: 1; margin-left: 15px;">
+                        <div class="info-item" style="flex: 1;">MODE <span>AUTO_V</span></div>
+                        <div class="info-item" style="flex: 1;">ENG_TYP <span>AXIAL_F</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+                <div class="box-skew-tag"></div>
+                <div>
+                    <div class="box-title">POWER_GRID_DIAGNOSTICS <span class="telemetry-code">SYS_LOAD</span></div>
+                    <div class="metric-cards-row">
+                        <div class="metric-card-block">
+                            <span>TOTAL_CONS</span>
+                            <div id="metricTotalPower">10027</div>
+                            <span>kWh</span>
+                        </div>
+                        <div class="metric-card-block">
+                            <span>ONLINE_DEV</span>
+                            <div>2</div>
+                            <span>UNITS</span>
+                        </div>
+                        <div class="metric-card-block">
+                            <span>CURR_LOAD</span>
+                            <div id="metricCurrentLoad" style="color: var(--cyber-yellow);">45.2</div>
+                            <span>kW</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="height: 110px; width: 100%; display: flex; flex-direction: column; justify-content: flex-end;">
+                    <div style="font-size: 9px; margin-bottom: 5px; color: var(--text-muted); display: flex; justify-content: space-between; text-transform: uppercase;">
+                        <span>REALTIME_LOAD_WAVEFORM</span>
+                        <span id="realtimeLoadVal" style="color: var(--cyber-yellow); font-weight: bold;">45.2 kW</span>
+                    </div>
+                    <div style="flex: 1; position: relative;">
+                        <svg id="realtimePowerGraph" width="100%" height="100%">
+                            <defs>
+                                <linearGradient id="cyberAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--cyber-yellow)" stop-opacity="0.15"/>
+                                    <stop offset="100%" stop-color="var(--bg-base)" stop-opacity="0.0"/>
+                                </linearGradient>
+                            </defs>
+                            <g id="graphGridLines" stroke="rgba(78, 97, 120, 0.08)" stroke-width="1"></g>
+                            <path id="energyPathArea" class="neon-signal-area" d="" />
+                            <path id="energyPathLine" class="neon-signal-path" d="" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function startSystemClock() {
+            const clockNode = document.getElementById('liveClockDisplay');
+            setInterval(() => {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const date = String(now.getDate()).padStart(2, '0');
+                const hrs = String(now.getHours()).padStart(2, '0');
+                const mins = String(now.getMinutes()).padStart(2, '0');
+                const secs = String(now.getSeconds()).padStart(2, '0');
+                clockNode.textContent = `${year}-${month}-${date} ${hrs}:${mins}:${secs} // SYS_TIME`;
+            }, 1000);
+        }
+
+        const channelPathsData = [
+            "M20,80 Q50,75 80,68 T140,71 T200,62 T260,64 T290,60",
+            "M20,40 Q60,55 90,35 T150,48 T210,30 T250,55 T290,25",
+            "M20,65 Q45,25 85,55 T130,30 T190,75 T240,40 T290,68"
+        ];
+        const channelColors = ["var(--glitch-blue)", "var(--cyber-yellow)", "var(--glitch-red)"];
+        let activeChannelIndex = 0;
+
+        function renderHistoricalChannel() {
+            const targetGroup = document.getElementById('historicalDynamicPaths');
+            targetGroup.innerHTML = `
+                <path d="${channelPathsData[activeChannelIndex]}" fill="none" stroke="${channelColors[activeChannelIndex]}" stroke-width="1.5" />
+            `;
+        }
+
+        function switchChannel(index) {
+            activeChannelIndex = index;
+            document.querySelectorAll('.legend-node').forEach((node, i) => {
+                if(i === index) node.classList.add('active');
+                else node.classList.remove('active');
+            });
+            renderHistoricalChannel();
+        }
+
+        const syntheticMockAlertStrings = [
+            "WARN: O2_LEVELS DROPPING BELOW 14%",
+            "SYS_ERR: VENTILATION_FAN_02 BLOCKED",
+            "INTRUSION: ANOMALOUS TELEMETRY LINE DETECTED",
+            "CRITICAL: MOISTURE HYPER-SPIKE IN SECTOR 4"
+        ];
+
+        window.addEventListener('keydown', function(event) {
+            // TAP 'K' TO GENERATE A RANDOM INTRUSION ALERT MOCK
+            if (event.key === 'k' || event.key === 'K') {
+                const layer = document.getElementById('alertTerminalLayer');
+                const randomIndex = Math.floor(Math.random() * syntheticMockAlertStrings.length);
+                const chosenText = syntheticMockAlertStrings[randomIndex];
+                
+                const alertCard = document.createElement('div');
+                alertCard.className = 'glitch-card';
+                alertCard.setAttribute('data-text', chosenText);
+                alertCard.textContent = chosenText;
+                
+                layer.appendChild(alertCard);
+                
+                setTimeout(() => {
+                    alertCard.style.opacity = '0';
+                    setTimeout(() => alertCard.remove(), 300);
+                }, 4000);
+            }
+            // TAP 'J' TO CLEAR ALL CURRENT ACTIVE ALERTS IMMEDIATELY
+            if (event.key === 'j' || event.key === 'J') {
+                const layer = document.getElementById('alertTerminalLayer');
+                if (layer) {
+                    // Instantly sweeps out all existing dynamic children components inside the node frame
+                    layer.innerHTML = '';
+                }
+            }
+        });
+
+        function initRealtimeEnergyGraph() {
+            const svg = document.getElementById('realtimePowerGraph');
+            const gridGroup = document.getElementById('graphGridLines');
+            const linePath = document.getElementById('energyPathLine');
+            const areaPath = document.getElementById('energyPathArea');
+            const loadText = document.getElementById('realtimeLoadVal');
+            const blockLoadText = document.getElementById('metricCurrentLoad');
+            const totalPowerText = document.getElementById('metricTotalPower');
+
+            let totalPower = 10027.4;
+            const maxPoints = 30;
+            let dataPoints = Array.from({length: maxPoints}, () => 42 + Math.random() * 8);
+            
+            const width = svg.clientWidth || 280;
+            const height = svg.clientHeight || 80;
+
+            gridGroup.innerHTML = `
+                <line x1="0" y1="${height * 0.33}" x2="${width}" y2="${height * 0.33}" />
+                <line x1="0" y1="${height * 0.66}" x2="${width}" y2="${height * 0.66}" />
+            `;
+
+            function updateChartFrame() {
+                const lastVal = dataPoints[dataPoints.length - 1];
+                const shift = (Math.random() - 0.5) * 5;
+                let nextVal = lastVal + shift;
+                if(nextVal < 25) nextVal = 25;
+                if(nextVal > 75) nextVal = 75;
+                
+                dataPoints.push(nextVal);
+                dataPoints.shift();
+
+                totalPower += (nextVal / 3600);
+                totalPowerText.textContent = Math.floor(totalPower);
+
+                const displayVal = nextVal.toFixed(1);
+                loadText.textContent = `${displayVal} kW`;
+                blockLoadText.textContent = displayVal;
+
+                const stepX = width / (maxPoints - 1);
+                let pathString = "";
+                
+                dataPoints.forEach((val, i) => {
+                    const x = i * stepX;
+                    const y = height - ((val / 100) * height);
+                    if (i === 0) {
+                        pathString += `M ${x} ${y}`;
+                    } else {
+                        pathString += ` L ${x} ${y}`;
+                    }
+                });
+
+                linePath.setAttribute('d', pathString);
+                areaPath.setAttribute('d', `${pathString} L ${width} ${height} L 0 ${height} Z`);
+            }
+
+            setInterval(updateChartFrame, 700);
+        }
+
+        window.onload = function() {
+            startSystemClock();
+            renderHistoricalChannel();
+            initRealtimeEnergyGraph();
+        };
+    </script>
+</body>
+</html>

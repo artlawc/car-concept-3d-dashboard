@@ -1,0 +1,368 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Interactive Flight Seatmap - ECharts Architecture Clone</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #container {
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 95vw;
+            height: 95vh;
+            max-width: 600px;
+            max-height: 900px;
+            
+            /* Emulate ECharts layout wrapper alignment */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        svg#svgContainer {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+        /* Style vectors directly via CSS rules */
+        g[name] {
+            cursor: pointer;
+        }
+        g[name] path, g[name] rect, g[name] polygon, g[name] circle {
+            transition: fill 0.15s ease, stroke 0.15s ease;
+        }
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <!-- Replaced heavy canvas context structures with a native vector transformation viewport -->
+    <svg id="svgContainer">
+        <g id="viewportGroup"></g>
+    </svg>
+    <div id="tooltip"></div>
+</div>
+
+<script>
+    const svgContainer = document.getElementById('svgContainer');
+    const viewportGroup = document.getElementById('viewportGroup');
+    const container = document.getElementById('container');
+    const tooltip = document.getElementById('tooltip');
+
+    const bgUrl = 'http://localhost:8080/flight-seats.svg';
+    
+    let baseXmlDoc = null;
+    let hoveredSeat = null;
+
+    const takenSeatNames = new Set(['26E', '26D', '26C', '25D', '23C', '21A', '20F']);
+    const userSelectedSeats = new Set();
+
+    // Advanced Pan-and-Zoom Transform Matrix parameters
+    let viewState = { zoom: 1, panX: 0, panY: 0 };
+    let isDragging = false;
+    let startDragX = 0, startDragY = 0;
+    let basePinchDist = 0;
+    let basePinchZoom = 1;
+
+    // Bootstrap lifecycle setup
+    fetch(bgUrl)
+        .then(response => response.text())
+        .then(svgText => {
+            const parser = new DOMParser();
+            baseXmlDoc = parser.parseFromString(svgText, "image/svg+xml");
+            const incomingSvg = baseXmlDoc.querySelector("svg");
+
+            // Strip unneeded structural background rectangles that inflate layout bounds
+            const baseBlockingRect = baseXmlDoc.getElementById('background') || baseXmlDoc.querySelector('rect[id="background"]');
+            if (baseBlockingRect) baseBlockingRect.remove();
+
+            // Append all root children paths into our dynamic wrapper matrix group
+            while (incomingSvg.firstChild) {
+                viewportGroup.appendChild(incomingSvg.firstChild);
+            }
+
+            // --- DEEP ECHARTS-STYLE BOUNDARY ISOLATION ENGINE ---
+            // Force the layout engine to calculate exact boundary dimensions of active graphics blocks
+            const geoBox = viewportGroup.getBBox();
+            
+            // Reconfigure internal viewports to center *only* where graphic contents exist
+            const layoutSizeWidth = container.clientWidth * 0.94;
+            const layoutSizeHeight = container.clientHeight * 0.94;
+
+            const scaleW = layoutSizeWidth / geoBox.width;
+            const scaleH = layoutSizeHeight / geoBox.height;
+            
+            // Establish base matrix transform properties
+            viewState.zoom = Math.min(scaleW, scaleH);
+            viewState.panX = (container.clientWidth / 2) - (viewState.zoom * (geoBox.x + geoBox.width / 2));
+            viewState.panY = (container.clientHeight / 2) - (viewState.zoom * (geoBox.y + geoBox.height / 2));
+
+            applyTransformations();
+            initializeInteractiveElements();
+        });
+
+    function initializeInteractiveElements() {
+        // Find all seat groups inside the vector tree structure
+        const seatGroups = viewportGroup.querySelectorAll('g[name]');
+        
+        seatGroups.forEach(g => {
+            const name = g.getAttribute("name");
+            if (!name || name.startsWith('path') || name.includes('text')) return;
+
+            // Apply base status configurations
+            refreshGroupState(g, name);
+
+            // Vector Action Handlers
+            g.addEventListener('mouseenter', (e) => handleSeatHover(e, name, g));
+            g.addEventListener('mousemove', handleTooltipMove);
+            g.addEventListener('mouseleave', () => handleSeatLeave(g, name));
+            g.addEventListener('click', (e) => handleSeatClick(e, name, g));
+        });
+
+        // Global Panning / Zoom Listeners
+        svgContainer.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mouseup', handleMouseUp);
+        svgContainer.addEventListener('mousemove', handleGlobalPan);
+        svgContainer.addEventListener('wheel', handleWheel, { passive: false });
+
+        // Touch Interaction Event Binding
+        svgContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+        svgContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+        svgContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+    }
+
+    // function refreshGroupState(group, name) {
+    //     const isTaken = takenSeatNames.has(name);
+    //     const isSelected = userSelectedSeats.has(name);
+    //     const isHovered = (hoveredSeat === name);
+    //
+    //     let fillStyle = '';
+    //     let strokeStyle = '';
+    //
+    //     if (isTaken) {
+    //         fillStyle = '#bf0e08'; 
+    //         strokeStyle = '#900c06';
+    //     } else if (isSelected) {
+    //         fillStyle = 'green';
+    //         strokeStyle = '#004d00';
+    //     } else if (isHovered) {
+    //         fillStyle = 'rgba(76, 175, 80, 0.6)'; 
+    //         strokeStyle = 'green';
+    //     }
+    //
+    //     group.querySelectorAll('path, rect, polygon, circle').forEach(child => {
+    //         if (isTaken || isSelected || isHovered) {
+    //             child.style.fill = fillStyle;
+    //             child.style.stroke = strokeStyle;
+    //             if (isHovered) child.style.strokeWidth = "1.5px";
+    //         } else {
+    //             child.style.removeProperty('fill');
+    //             child.style.removeProperty('stroke');
+    //             child.style.removeProperty('stroke-width');
+    //         }
+    //     });
+    // }
+
+    function refreshGroupState(group, name) {
+        const isTaken = takenSeatNames.has(name);
+        const isSelected = userSelectedSeats.has(name);
+        const isHovered = (hoveredSeat === name);
+
+        let fillStyle = '';
+        let strokeStyle = '';
+        let strokeWidth = '1px';
+
+        if (isTaken) {
+            fillStyle = '#bf0e08'; 
+            strokeStyle = '#900c06';
+        } else if (isSelected) {
+            fillStyle = 'green';
+            strokeStyle = '#004d00';
+        } else if (isHovered) {
+            fillStyle = 'rgba(76, 175, 80, 0.6)'; 
+            strokeStyle = 'green';
+            strokeWidth = '1.5px';
+        } else {
+            // Core Fix: Force all unselected, untaken available seats to be perfectly hollow frame components
+            fillStyle = 'transparent'; 
+            strokeStyle = '#999999'; // Standard subtle gray outline matching the ECharts template theme
+            strokeWidth = '1px';
+        }
+
+        group.querySelectorAll('path, rect, polygon, circle').forEach(child => {
+            child.style.fill = fillStyle;
+            child.style.stroke = strokeStyle;
+            child.style.strokeWidth = strokeWidth;
+        });
+    }
+
+    function applyTransformations() {
+        // Replicates ZRender affine transform matrix manipulations efficiently via CSS hardware acceleration
+        viewportGroup.setAttribute(
+            'transform', 
+            `translate(${viewState.panX}, ${viewState.panY}) scale(${viewState.zoom})`
+        );
+    }
+
+    // --- INTERACTION PATTERNS ---
+    function handleSeatHover(e, name, group) {
+        if (isDragging) return;
+        hoveredSeat = name;
+        refreshGroupState(group, name);
+
+        tooltip.style.display = 'block';
+        let statusText = '<span style="color:#b9f6ca;">[Available]</span>';
+        if (takenSeatNames.has(name)) {
+            statusText = '<span style="color:#ff8a80;">[Taken]</span>';
+        } else if (userSelectedSeats.has(name)) {
+            statusText = '<span style="color:#80d8ff;">[Selected]</span>';
+        }
+        tooltip.innerHTML = `Seat: <b>${name}</b> <br/> ${statusText}`;
+    }
+
+    function handleTooltipMove(e) {
+        const rect = container.getBoundingClientRect();
+        tooltip.style.left = `${e.clientX - rect.left + 15}px`;
+        tooltip.style.top = `${e.clientY - rect.top + 12}px`;
+    }
+
+    function handleSeatLeave(group, name) {
+        hoveredSeat = null;
+        refreshGroupState(group, name);
+        tooltip.style.display = 'none';
+    }
+
+    function handleSeatClick(e, name, group) {
+        if (isDragging || takenSeatNames.has(name)) return;
+        
+        if (userSelectedSeats.has(name)) {
+            userSelectedSeats.delete(name);
+        } else {
+            userSelectedSeats.add(name);
+        }
+        refreshGroupState(group, name);
+        handleSeatHover(e, name, group); // Refresh status text in tooltip
+        console.log('selected', Array.from(userSelectedSeats));
+    }
+
+    // --- PAN AND ZOOM ENGINE ---
+    function handleMouseDown(e) {
+        if (e.button === 0 && !e.target.closest('g[name]')) {
+            isDragging = true;
+            startDragX = e.clientX;
+            startDragY = e.clientY;
+        }
+    }
+
+    function handleGlobalPan(e) {
+        if (!isDragging) return;
+        viewState.panX += e.clientX - startDragX;
+        viewState.panY += e.clientY - startDragY;
+        startDragX = e.clientX;
+        startDragY = e.clientY;
+        applyTransformations();
+    }
+
+    function handleMouseUp() {
+        isDragging = false;
+    }
+
+    function handleWheel(e) {
+        e.preventDefault();
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const nextZoom = Math.max(0.4, Math.min(12, viewState.zoom * zoomFactor));
+
+        viewState.panX = mouseX - (mouseX - viewState.panX) * (nextZoom / viewState.zoom);
+        viewState.panY = mouseY - (mouseY - viewState.panY) * (nextZoom / viewState.zoom);
+        viewState.zoom = nextZoom;
+
+        applyTransformations();
+    }
+
+    // --- TOUCH SUPPORT ENGINE ---
+    function handleTouchStart(e) {
+        if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            if (!touch.target.closest('g[name]')) {
+                isDragging = true;
+                startDragX = touch.clientX;
+                startDragY = touch.clientY;
+            }
+        } else if (e.touches.length === 2) {
+            isDragging = false;
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            basePinchDist = Math.sqrt(dx * dx + dy * dy);
+            basePinchZoom = viewState.zoom;
+        }
+    }
+
+    function handleTouchMove(e) {
+        if (isDragging && e.touches.length === 1) {
+            const touch = e.touches[0];
+            viewState.panX += touch.clientX - startDragX;
+            viewState.panY += touch.clientY - startDragY;
+            startDragX = touch.clientX;
+            startDragY = touch.clientY;
+            applyTransformations();
+        } else if (e.touches.length === 2) {
+            e.preventDefault();
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            const rect = container.getBoundingClientRect();
+            
+            const zoomFactor = dist / basePinchDist;
+            const nextZoom = Math.max(0.4, Math.min(12, basePinchZoom * zoomFactor));
+            
+            viewState.panX = (midX - rect.left) - ((midX - rect.left) - viewState.panX) * (nextZoom / viewState.zoom);
+            viewState.panY = (midY - rect.top) - ((midY - rect.top) - viewState.panY) * (nextZoom / viewState.zoom);
+            viewState.zoom = nextZoom;
+            
+            applyTransformations();
+        }
+    }
+
+    function handleTouchEnd() {
+        isDragging = false;
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,237 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KSIA Traffic Path Animation - Pro Calibrated</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        #container {
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 95vw;
+            max-width: 900px;
+            /* Aspect ratio will adjust dynamically via JS after fetching SVG metadata specs */
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <canvas id="trafficCanvas"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById('trafficCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('container');
+
+    // CONFIGURATION FLAGS
+    const showRoutePaths = false; // Set to true to show the track guidelines, false to hide them
+    const globalLineWidth = 2.5;
+    // const bgUrl = 'https://echarts.apache.org/examples/data/asset/geo/ksia-ext-plan-min.svg';
+    const bgUrl = 'http://localhost:8080/ksia-ext-plan-min.svg';
+
+    // Dynamic scale parameters parsed during loading lifecycle
+    let svgNativeWidth = 782.3775;
+    let svgNativeHeight = 730;
+
+    // Custom Path2D tracking vehicle symbol
+    const symbolPathString = 'M87.1667 3.8333L80.5.5h-60l-6.6667 3.3333L.5 70.5v130l10 10h80l10 -10v-130zM15.5 190.5l15 -20h40l15 20zm75 -65l-15 5v35l15 15zm-80 0l15 5v35l-15 15zm65 0l15 -5v-40l-15 20zm-50 0l-15 -5v-40l15 20zm 65,-55 -15,25 c -15,-5 -35,-5 -50,0 l -15,-25 c 25,-15 55,-15 80,0 z';
+    const symbolPath = new Path2D(symbolPathString);
+
+    const routesData = [
+        {
+            color: '#a10000',
+            speed: 1.5,
+            coords: [[50.875133928571415, 242.66287667410717],[62.03696428571425, 264.482421875],[72.63357421874997, 273.62779017857144],[92.78291852678569, 285.869140625],[113.43637834821425, 287.21854073660717],[141.44788783482142, 288.92947823660717],[191.71686104910714, 289.5507114955357],[198.3060072544643, 294.0673828125],[204.99699497767858, 304.60288783482144],[210.79177734375003, 316.7373046875],[212.45179408482142, 329.3656529017857],[210.8885267857143, 443.3925083705358],[215.35936941964286, 453.00634765625],[224.38761997767858, 452.15087890625],[265.71490792410714, 452.20179966517856],[493.3408844866072, 453.77525111607144],[572.8892940848216, 448.77992466517856],[608.9513755580358, 448.43366350446433],[619.99099609375, 450.8778599330358],[624.2479715401787, 456.2194475446429],[628.1434095982145, 463.9899553571429],[629.8492550223216, 476.0276227678571],[631.2750362723216, 535.7322126116071],[624.6757059151787, 546.6496233258929],[617.1801702008929, 552.6480887276786],[603.7269056919645, 554.5066964285714],[588.0178515625, 557.5517578125],[529.4386104910716, 556.2991071428571],[422.1994921875001, 551.38525390625],[291.66921875, 552.5767996651786],[219.4279380580357, 547.4949079241071],[209.53912667410714, 541.5931919642858],[206.70793247767858, 526.1947544642858],[206.70793247767858, 507.4049944196429],[206.12234375000003, 468.7663225446429],[204.48778738839286, 459.44782366071433],[197.56256417410714, 452.8943219866071],[170.31995814732142, 456.27546037946433],[1.8078906249999704, 460.5935407366071]]
+        },
+        {
+            color: '#00067d',
+            speed: 1.2,
+            coords: [[779.4595368303574, 287.98744419642856],[689.07009765625, 291.0477818080357],[301.83300223214286, 290.49783761160717],[229.31165736607142, 291.73011997767856],[220.73660156250003, 297.4077845982143],[214.74832031250003, 308.52378627232144],[213.82156250000003, 421.35400390625],[213.19523716517858, 443.0564313616071],[222.31005301339286, 455.95465959821433],[271.71846540178575, 454.37611607142856],[359.64843191964286, 455.9393833705358],[580.2524358258929, 448.11286272321433],[627.7156752232145, 460.7463030133929],[632.3290959821429, 536.6386021205358],[628.9123130580358, 548.4776785714286],[612.5667494419645, 556.8235909598214],[543.7167912946429, 555.4741908482143],[429.1756361607143, 551.9402901785714],[293.42089285714286, 551.2172154017858],[226.20039899553575, 556.0699637276786],[215.49176339285714, 562.7253069196429],[213.21051339285714, 591.6024693080358],[212.00878348214286, 625.6735491071429],[197.43017020089286, 645.0743582589286],[187.41405691964286, 647.0857282366071],[101.79589285714286, 649.0207170758929],[69.96023437499997, 650.1613420758929],[56.48150948660714, 656.8268694196429],[51.11446149553569, 665.2542550223214]]
+        },
+        {
+            color: '#997405',
+            speed: 0.9,
+            coords: [[2.5920703124999704, 450.66908482142856],[204.0651450892857, 453.13364955357144],[378.72844029017864, 453.13874162946433],[551.1817745535716, 456.1532505580358],[578.3734598214287, 456.91196986607144],[601.2317885044645, 458.9895368303571],[614.1503850446429, 462.1669921875],[618.99294921875, 479.68882533482144],[620.0826534598216, 513.5969587053571],[615.6932840401787, 528.7306082589286],[608.4829045758929, 533.2625558035714],[592.7127455357145, 534.9582170758929],[583.09890625, 527.5492466517858],[578.6535239955358, 516.4077845982143],[578.6535239955358, 498.36146763392856],[577.9966462053571, 477.0613141741071],[575.3691350446429, 469.1940569196429],[569.0753292410716, 462.63037109375],[553.9518638392858, 460.6444614955358],[298.10051060267864, 465.61432756696433],[193.49908761160714, 460.1759905133929],[116.40505859374997, 465.78236607142856],[3.5137360491071092, 463.47565569196433]]
+        }
+    ];
+
+    let animationTracks = [];
+    const bgImage = new Image();
+
+    // Auto-detect SVG metadata specs upon bootstrap lifecycle initialization
+    fetch(bgUrl)
+        .then(response => response.text())
+        .then(svgText => {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(svgText, "image/svg+xml");
+            const svgElement = xmlDoc.getElementsByTagName("svg")[0];
+            
+            if (svgElement) {
+                const viewBox = svgElement.getAttribute("viewBox");
+                if (viewBox) {
+                    const parts = viewBox.split(/\s+/).map(Number);
+                    if (parts.length === 4) {
+                        svgNativeWidth = parts[2];
+                        svgNativeHeight = parts[3];
+                    }
+                }
+            }
+            
+            // Assign container framing bounds to map scale natively
+            container.style.aspectRatio = `${svgNativeWidth} / ${svgNativeHeight}`;
+            bgImage.src = bgUrl;
+        });
+
+    bgImage.onload = () => {
+        resizeCanvas();
+        initAnimationTracks();
+        window.addEventListener('resize', resizeCanvas);
+        animate();
+    };
+
+    function resizeCanvas() {
+        const rect = container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+    }
+
+    function initAnimationTracks() {
+        routesData.forEach(route => {
+            let totalLength = 0;
+            let segments = [];
+            
+            // Fixed requirement: Removed first-element loops. Linear endpoint to terminal trajectory.
+            for (let i = 0; i < route.coords.length - 1; i++) {
+                const p1 = route.coords[i];
+                const p2 = route.coords[i + 1];
+                
+                const dx = p2[0] - p1[0]; 
+                const dy = p2[1] - p1[1];
+                const len = Math.sqrt(dx * dx + dy * dy);
+                
+                segments.push({ p1, p2, len, startDist: totalLength });
+                totalLength += len;
+            }
+
+            animationTracks.push({
+                color: route.color,
+                speed: route.speed,
+                coords: route.coords,
+                segments: segments,
+                totalLength: totalLength,
+                currentDistance: 0
+            });
+        });
+    }
+
+    function getPointAtDistance(track, dist) {
+        if (dist <= 0) return { x: track.coords[0][0], y: track.coords[0][1], angle: 0 };
+        
+        // Fixed requirement: Terminal boundary instant teleport back to index point 0
+        if (dist >= track.totalLength) {
+            track.currentDistance = 0; 
+            return { x: track.coords[0][0], y: track.coords[0][1], angle: 0 };
+        }
+
+        let seg = track.segments[0];
+        for (let i = 0; i < track.segments.length; i++) {
+            if (dist >= track.segments[i].startDist && dist <= track.segments[i].startDist + track.segments[i].len) {
+                seg = track.segments[i];
+                break;
+            }
+        }
+
+        const t = (dist - seg.startDist) / seg.len;
+        
+        const x = seg.p1[0] + (seg.p2[0] - seg.p1[0]) * t;
+        const y = seg.p1[1] + (seg.p2[1] - seg.p1[1]) * t;
+        const angle = Math.atan2(seg.p2[1] - seg.p1[1], seg.p2[0] - seg.p1[0]);
+
+        return { x, y, angle };
+    }
+
+    function drawStaticMap(rect) {
+        ctx.drawImage(bgImage, 0, 0, rect.width, rect.height);
+
+        // Flag logic condition check to show or hide the alignment paths
+        if (showRoutePaths) {
+            const scaleX = rect.width / svgNativeWidth;
+            const scaleY = rect.height / svgNativeHeight;
+
+            animationTracks.forEach(track => {
+                ctx.beginPath();
+                ctx.moveTo(track.coords[0][0] * scaleX, track.coords[0][1] * scaleY);
+                for (let i = 1; i < track.coords.length; i++) {
+                ctx.lineTo(track.coords[i][0] * scaleX, track.coords[i][1] * scaleY);
+            }
+            ctx.strokeStyle = track.color;
+            ctx.lineWidth = globalLineWidth;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.globalAlpha = 0.3; 
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        });
+    }
+}
+
+function animate() {
+    const rect = container.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    
+    drawStaticMap(rect);
+
+    const scaleX = rect.width / svgNativeWidth;
+    const scaleY = rect.height / svgNativeHeight;
+
+    animationTracks.forEach(track => {
+        track.currentDistance += track.speed;
+        
+        const point = getPointAtDistance(track, track.currentDistance);
+
+        const renderX = point.x * scaleX;
+        const renderY = point.y * scaleY;
+
+        ctx.save();
+        ctx.translate(renderX, renderY);
+        ctx.rotate(point.angle + Math.PI / 2);
+        
+        const carScale = 0.08 * (rect.width / 600); 
+        ctx.scale(carScale, carScale);
+        ctx.translate(-50, -105); // Precise anchor alignment tuning property
+        
+        ctx.fillStyle = track.color;
+        ctx.fill(symbolPath);
+        ctx.restore();
+    });
+
+    requestAnimationFrame(animate);
+}
+</script>
+
+</body>
+</html>
